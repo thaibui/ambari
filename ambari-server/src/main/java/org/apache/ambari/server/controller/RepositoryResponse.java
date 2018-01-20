@@ -18,6 +18,10 @@
 
 package org.apache.ambari.server.controller;
 
+import java.util.Set;
+
+import org.apache.ambari.server.state.stack.RepoTag;
+
 public class RepositoryResponse {
 
   private String stackName;
@@ -26,21 +30,28 @@ public class RepositoryResponse {
   private String osType;
   private String repoId;
   private String repoName;
+  private String distribution;
+  private String components;
   private String mirrorsList;
   private String defaultBaseUrl;
   private Long repositoryVersionId;
   private String versionDefinitionId;
   private Long clusterVersionId;
   private boolean unique;
+  private Set<RepoTag> tags;
 
   public RepositoryResponse(String baseUrl, String osType, String repoId,
-                            String repoName, String mirrorsList, String defaultBaseUrl) {
+                            String repoName, String distribution, String components,
+                            String mirrorsList, String defaultBaseUrl, Set<RepoTag> repoTags) {
     setBaseUrl(baseUrl);
     setOsType(osType);
     setRepoId(repoId);
     setRepoName(repoName);
+    setDistribution(distribution);
+    setComponents(components);
     setMirrorsList(mirrorsList);
     setDefaultBaseUrl(defaultBaseUrl);
+    setTags(repoTags);
   }
 
   public String getStackName() {
@@ -95,6 +106,22 @@ public class RepositoryResponse {
 
   public void setRepoName(String repoName) {
     this.repoName = repoName;
+  }
+
+  public String getDistribution() {
+    return distribution;
+  }
+
+  public void setDistribution(String distribution) {
+    this.distribution = distribution;
+  }
+
+  public String getComponents() {
+    return components;
+  }
+
+  public void setComponents(String components) {
+    this.components = components;
   }
 
   public String getMirrorsList() {
@@ -155,5 +182,20 @@ public class RepositoryResponse {
 
   public void setUnique(boolean unique) {
     this.unique = unique;
+  }
+
+
+  /**
+   * @return the repo tags
+   */
+  public Set<RepoTag> getTags() {
+    return tags;
+  }
+
+  /**
+   * @param repoTags    the repo tags
+   */
+  public void setTags(Set<RepoTag> repoTags) {
+    tags = repoTags;
   }
 }

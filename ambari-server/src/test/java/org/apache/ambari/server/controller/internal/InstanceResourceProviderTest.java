@@ -59,11 +59,9 @@ public class InstanceResourceProviderTest {
 
     propertySet.add(properties);
 
-    Request request = PropertyHelper.getCreateRequest(propertySet, Collections.<String,String>emptyMap());
+    Request request = PropertyHelper.getCreateRequest(propertySet, Collections.emptyMap());
 
-    InstanceResourceProvider provider = new InstanceResourceProvider(service,
-        PropertyHelper.getPropertyIds(Resource.Type.DRInstance),
-        PropertyHelper.getKeyPropertyIds(Resource.Type.DRInstance));
+    InstanceResourceProvider provider = new InstanceResourceProvider(service);
 
     try {
       provider.createResources(request);
@@ -104,11 +102,9 @@ public class InstanceResourceProviderTest {
 
     propertySet.add(properties);
 
-    Request request = PropertyHelper.getCreateRequest(propertySet, Collections.<String,String>emptyMap());
+    Request request = PropertyHelper.getCreateRequest(propertySet, Collections.emptyMap());
 
-    InstanceResourceProvider provider = new InstanceResourceProvider(service,
-        PropertyHelper.getPropertyIds(Resource.Type.DRInstance),
-        PropertyHelper.getKeyPropertyIds(Resource.Type.DRInstance));
+    InstanceResourceProvider provider = new InstanceResourceProvider(service);
 
     Set<Resource> resources = provider.getResources(request, null);
 
@@ -145,11 +141,9 @@ public class InstanceResourceProviderTest {
 
     propertySet.add(properties);
 
-    Request request = PropertyHelper.getCreateRequest(propertySet, Collections.<String,String>emptyMap());
+    Request request = PropertyHelper.getCreateRequest(propertySet, Collections.emptyMap());
 
-    InstanceResourceProvider provider = new InstanceResourceProvider(service,
-        PropertyHelper.getPropertyIds(Resource.Type.DRInstance),
-        PropertyHelper.getKeyPropertyIds(Resource.Type.DRInstance));
+    InstanceResourceProvider provider = new InstanceResourceProvider(service);
 
     provider.updateResources(request, null);
 
@@ -171,9 +165,7 @@ public class InstanceResourceProviderTest {
     // replay
     replay(service);
 
-    InstanceResourceProvider provider = new InstanceResourceProvider(service,
-        PropertyHelper.getPropertyIds(Resource.Type.DRInstance),
-        PropertyHelper.getKeyPropertyIds(Resource.Type.DRInstance));
+    InstanceResourceProvider provider = new InstanceResourceProvider(service);
 
     Predicate predicate = new PredicateBuilder().property(InstanceResourceProvider.INSTANCE_ID_PROPERTY_ID).equals("Instance1").toPredicate();
 
@@ -181,18 +173,5 @@ public class InstanceResourceProviderTest {
 
     // verify
     verify(service);
-  }
-
-  @Test
-  public void testGetKeyPropertyIds() throws Exception {
-    IvoryService service = createMock(IvoryService.class);
-
-    Map<Resource.Type, String> keyPropertyIds = PropertyHelper.getKeyPropertyIds(Resource.Type.DRInstance);
-
-    InstanceResourceProvider provider = new InstanceResourceProvider(service,
-        PropertyHelper.getPropertyIds(Resource.Type.DRInstance),
-        keyPropertyIds);
-
-    Assert.assertEquals(keyPropertyIds, provider.getKeyPropertyIds());
   }
 }

@@ -35,8 +35,7 @@ module.exports = Em.Route.extend(App.RouterRedirections, {
           // check server/web client versions match
           App.router.get('installerController').checkServerClientVersion().done(function () {
 
-            var name = 'Cluster Install Wizard';
-            $('title').text('Ambari - ' + name);
+            $('title').text(Em.I18n.t('app.name.subtitle').format(Em.I18n.t('app.name.subtitle.installer')));
             $('#main').addClass('install-wizard-content');
 
             App.router.get('mainViewsController').loadAmbariViews();
@@ -149,9 +148,11 @@ module.exports = Em.Route.extend(App.RouterRedirections, {
     connectOutlets: function (router) {
       console.time('step1 connectOutlets');
       var self = this;
-      var controller = router.get('installerController');
+      var controller = router.get('installerController'),
+        wizardStep1Controller = router.get('wizardStep1Controller');
       controller.setCurrentStep('1');
       controller.loadAllPriorSteps().done(function () {
+        wizardStep1Controller.set('wizardController', controller);
         controller.connectOutlet('wizardStep1', controller.get('content'));
         self.scrollTop();
         console.timeEnd('step1 connectOutlets');

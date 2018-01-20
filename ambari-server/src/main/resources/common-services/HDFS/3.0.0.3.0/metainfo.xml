@@ -157,6 +157,7 @@
           <name>HDFS_CLIENT</name>
           <displayName>HDFS Client</displayName>
           <category>CLIENT</category>
+          <componentType>HCFS_CLIENT</componentType>
           <cardinality>1+</cardinality>
           <versionAdvertised>true</versionAdvertised>
           <commandScript>
@@ -270,11 +271,6 @@
             <package>
               <name>hadoop</name>
             </package>
-            <package>
-              <name>hadoop-lzo</name>
-              <skipUpgrade>true</skipUpgrade>
-              <condition>should_install_lzo</condition>
-            </package>
           </packages>
         </osSpecific>
         
@@ -289,16 +285,6 @@
             </package>
             <package>
               <name>snappy-devel</name>
-            </package>
-            <package>
-              <name>lzo</name>
-              <skipUpgrade>true</skipUpgrade>
-              <condition>should_install_lzo</condition>
-            </package>
-            <package>
-              <name>hadoop-lzo-native</name>
-              <skipUpgrade>true</skipUpgrade>
-              <condition>should_install_lzo</condition>
             </package>
             <package>
               <name>hadoop-libhdfs</name>
@@ -319,16 +305,6 @@
               <name>snappy-devel</name>
             </package>
             <package>
-              <name>liblzo2-2</name>
-              <skipUpgrade>true</skipUpgrade>
-              <condition>should_install_lzo</condition>
-            </package>
-            <package>
-              <name>hadoop-lzo-native</name>
-              <skipUpgrade>true</skipUpgrade>
-              <condition>should_install_lzo</condition>
-            </package>
-            <package>
               <name>hadoop-libhdfs</name>
             </package>
           </packages>
@@ -345,11 +321,6 @@
             </package>
             <package>
               <name>libsnappy-dev</name>
-            </package>
-            <package>
-              <name>liblzo2-2</name>
-              <skipUpgrade>true</skipUpgrade>
-              <condition>should_install_lzo</condition>
             </package>
             <package>
               <name>hadoop-hdfs</name>

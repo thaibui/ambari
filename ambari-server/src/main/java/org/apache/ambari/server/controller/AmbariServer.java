@@ -77,6 +77,7 @@ import org.apache.ambari.server.controller.internal.ViewPermissionResourceProvid
 import org.apache.ambari.server.controller.metrics.ThreadPoolEnabledPropertyProvider;
 import org.apache.ambari.server.controller.utilities.KerberosChecker;
 import org.apache.ambari.server.controller.utilities.KerberosIdentityCleaner;
+import org.apache.ambari.server.ldap.LdapModule;
 import org.apache.ambari.server.metrics.system.MetricsService;
 import org.apache.ambari.server.orm.GuiceJpaInitializer;
 import org.apache.ambari.server.orm.PersistenceType;
@@ -91,6 +92,7 @@ import org.apache.ambari.server.orm.dao.ResourceDAO;
 import org.apache.ambari.server.orm.dao.UserDAO;
 import org.apache.ambari.server.orm.dao.ViewInstanceDAO;
 import org.apache.ambari.server.orm.entities.MetainfoEntity;
+import org.apache.ambari.server.orm.entities.UserEntity;
 import org.apache.ambari.server.resources.ResourceManager;
 import org.apache.ambari.server.resources.api.rest.GetResource;
 import org.apache.ambari.server.scheduler.ExecutionScheduleManager;
@@ -98,9 +100,11 @@ import org.apache.ambari.server.security.AmbariServerSecurityHeaderFilter;
 import org.apache.ambari.server.security.AmbariViewsSecurityHeaderFilter;
 import org.apache.ambari.server.security.CertificateManager;
 import org.apache.ambari.server.security.SecurityFilter;
+import org.apache.ambari.server.security.authentication.AmbariAuthenticationEventHandlerImpl;
+import org.apache.ambari.server.security.authentication.AmbariLocalAuthenticationProvider;
+import org.apache.ambari.server.security.authentication.jwt.AmbariJwtAuthenticationProvider;
+import org.apache.ambari.server.security.authentication.pam.AmbariPamAuthenticationProvider;
 import org.apache.ambari.server.security.authorization.AmbariLdapAuthenticationProvider;
-import org.apache.ambari.server.security.authorization.AmbariLocalUserProvider;
-import org.apache.ambari.server.security.authorization.AmbariPamAuthenticationProvider;
 import org.apache.ambari.server.security.authorization.AmbariUserAuthorizationFilter;
 import org.apache.ambari.server.security.authorization.PermissionHelper;
 import org.apache.ambari.server.security.authorization.Users;
@@ -327,6 +331,7 @@ public class AmbariServer {
 
       factory.registerSingleton("guiceInjector", injector);
       factory.registerSingleton("ambariConfiguration", injector.getInstance(Configuration.class));
+      factory.registerSingleton("ambariAuthenticationEventHandler", injector.getInstance(AmbariAuthenticationEventHandlerImpl.class));
       factory.registerSingleton("ambariUsers", injector.getInstance(Users.class));
       factory.registerSingleton("passwordEncoder",
         injector.getInstance(PasswordEncoder.class));
@@ -337,7 +342,7 @@ public class AmbariServer {
       factory.registerSingleton("ambariLdapAuthenticationProvider",
         injector.getInstance(AmbariLdapAuthenticationProvider.class));
       factory.registerSingleton("ambariLocalAuthenticationProvider",
-        injector.getInstance(AmbariLocalUserProvider.class));
+          injector.getInstance(AmbariLocalAuthenticationProvider.class));
       factory.registerSingleton("ambariLdapDataPopulator",
         injector.getInstance(AmbariLdapDataPopulator.class));
       factory.registerSingleton("ambariUserAuthorizationFilter",
@@ -346,6 +351,8 @@ public class AmbariServer {
         injector.getInstance(AmbariInternalAuthenticationProvider.class));
       factory.registerSingleton("ambariPamAuthenticationProvider",
 	      injector.getInstance(AmbariPamAuthenticationProvider.class));
+      factory.registerSingleton("ambariJwtAuthenticationProvider",
+	      injector.getInstance(AmbariJwtAuthenticationProvider.class));
 
       // Spring Security xml config depends on this Bean
       String[] contextLocations = {SPRING_CONTEXT_LOCATION};
@@ -532,7 +539,7 @@ public class AmbariServer {
       LOG.info(clusterDump.toString());
 
       LOG.info("********* Reconciling Alert Definitions **********");
-      ambariMetaInfo.reconcileAlertDefinitions(clusters);
+      ambariMetaInfo.reconcileAlertDefinitions(clusters, false);
 
       LOG.info("********* Initializing ActionManager **********");
       ActionManager manager = injector.getInstance(ActionManager.class);
@@ -559,6 +566,9 @@ public class AmbariServer {
        * Start the server after controller state is recovered.
        */
       server.start();
+
+      //views initialization will reset inactive interval with default value, so we should set it after
+      configureMaxInactiveInterval();
 
       serverForAgent.start();
       LOG.info("********* Started Server **********");
@@ -850,10 +860,13 @@ public class AmbariServer {
     if (configs.getApiSSLAuthentication()) {
       sessionManager.getSessionCookieConfig().setSecure(true);
     }
+  }
 
+  protected void configureMaxInactiveInterval() {
     // each request that does not use AMBARISESSIONID will create a new
     // HashedSession in Jetty; these MUST be reaped after inactivity in order
     // to prevent a memory leak
+
     int sessionInactivityTimeout = configs.getHttpSessionInactiveTimeout();
     sessionManager.setMaxInactiveInterval(sessionInactivityTimeout);
   }
@@ -867,8 +880,16 @@ public class AmbariServer {
       LOG.info("Database init needed - creating default data");
       Users users = injector.getInstance(Users.class);
 
-      users.createUser("admin", "admin");
-      users.createUser("user", "user");
+      UserEntity userEntity;
+
+      // Create the admin user
+      userEntity = users.createUser("admin", "admin", "admin");
+      users.addLocalAuthentication(userEntity, "admin");
+      users.grantAdminPrivilege(userEntity);
+
+      // Create a normal user
+      userEntity = users.createUser("user", "user", "user");
+      users.addLocalAuthentication(userEntity, "user");
 
       MetainfoEntity schemaVersion = new MetainfoEntity();
       schemaVersion.setMetainfoName(Configuration.SERVER_VERSION_KEY);
@@ -907,7 +928,8 @@ public class AmbariServer {
     PersistKeyValueService.init(injector.getInstance(PersistKeyValueImpl.class));
     KeyService.init(injector.getInstance(PersistKeyValueImpl.class));
     BootStrapResource.init(injector.getInstance(BootStrapImpl.class));
-    StackAdvisorResourceProvider.init(injector.getInstance(StackAdvisorHelper.class));
+    StackAdvisorResourceProvider.init(injector.getInstance(StackAdvisorHelper.class),
+        injector.getInstance(Configuration.class));
     StageUtils.setGson(injector.getInstance(Gson.class));
     StageUtils.setTopologyManager(injector.getInstance(TopologyManager.class));
     StageUtils.setConfiguration(injector.getInstance(Configuration.class));
@@ -1061,7 +1083,7 @@ public class AmbariServer {
 
   public static void main(String[] args) throws Exception {
     logStartup();
-    Injector injector = Guice.createInjector(new ControllerModule(), new AuditLoggerModule());
+    Injector injector = Guice.createInjector(new ControllerModule(), new AuditLoggerModule(), new LdapModule());
 
     AmbariServer server = null;
     try {

@@ -46,10 +46,6 @@ retryAble = default("/commandParams/command_retry_enabled", False)
 # Version being upgraded/downgraded to
 version = default("/commandParams/version", None)
 
-# Version that is CURRENT.
-current_version = default("/hostLevelParams/current_version", None)
-
-
 stack_version_unformatted = config['hostLevelParams']['stack_version']
 stack_version_formatted = format_stack_version(stack_version_unformatted)
 upgrade_direction = default("/commandParams/upgrade_direction", None)
@@ -60,10 +56,6 @@ version_for_stack_feature_checks = get_stack_feature_version(config)
 stack_supports_ranger_kerberos = check_stack_feature(StackFeature.RANGER_KERBEROS_SUPPORT, version_for_stack_feature_checks)
 stack_supports_ranger_audit_db = check_stack_feature(StackFeature.RANGER_AUDIT_DB_SUPPORT, version_for_stack_feature_checks)
 stack_supports_core_site_for_ranger_plugin = check_stack_feature(StackFeature.CORE_SITE_FOR_RANGER_PLUGINS_SUPPORT, version_for_stack_feature_checks)
-
-# When downgrading the 'version' and 'current_version' are both pointing to the downgrade-target version
-# downgrade_from_version provides the source-version the downgrade is happening from
-downgrade_from_version = default("/commandParams/downgrade_from_version", None)
 
 hostname = config['hostname']
 
@@ -165,19 +157,29 @@ if has_metric_collector:
   pass
 
 # Security-related params
-security_enabled = config['configurations']['cluster-env']['security_enabled']
+kerberos_security_enabled = config['configurations']['cluster-env']['security_enabled']
+
 kafka_kerberos_enabled = (('security.inter.broker.protocol' in config['configurations']['kafka-broker']) and
-                         ((config['configurations']['kafka-broker']['security.inter.broker.protocol'] == "PLAINTEXTSASL") or
-                          (config['configurations']['kafka-broker']['security.inter.broker.protocol'] == "SASL_PLAINTEXT")))
+                         ((config['configurations']['kafka-broker']['security.inter.broker.protocol'] in ("PLAINTEXTSASL", "SASL_PLAINTEXT")) or
+                         ((config['configurations']['kafka-broker']['security.inter.broker.protocol'] == "SASL_SSL") and
+                           check_stack_feature(StackFeature.KAFKA_EXTENDED_SASL_SUPPORT, stack_version_formatted))))
 
 
-if security_enabled and stack_version_formatted != "" and 'kafka_principal_name' in config['configurations']['kafka-env'] \
+kafka_other_sasl_enabled = not kerberos_security_enabled and check_stack_feature(StackFeature.KAFKA_LISTENERS, stack_version_formatted) and \
+                          check_stack_feature(StackFeature.KAFKA_EXTENDED_SASL_SUPPORT, stack_version_formatted) and \
+                          (("SASL_PLAINTEXT" in config['configurations']['kafka-broker']['listeners']) or
+                          ("PLAINTEXTSASL" in config['configurations']['kafka-broker']['listeners']) or
+                          ("SASL_SSL" in config['configurations']['kafka-broker']['listeners']))
+
+if kerberos_security_enabled and stack_version_formatted != "" and 'kafka_principal_name' in config['configurations']['kafka-env'] \
   and check_stack_feature(StackFeature.KAFKA_KERBEROS, stack_version_formatted):
     _hostname_lowercase = config['hostname'].lower()
     _kafka_principal_name = config['configurations']['kafka-env']['kafka_principal_name']
     kafka_jaas_principal = _kafka_principal_name.replace('_HOST',_hostname_lowercase)
     kafka_keytab_path = config['configurations']['kafka-env']['kafka_keytab']
     kafka_bare_jaas_principal = get_bare_principal(_kafka_principal_name)
+    kafka_kerberos_params = "-Djava.security.auth.login.config="+ conf_dir +"/kafka_jaas.conf"
+elif kafka_other_sasl_enabled:
     kafka_kerberos_params = "-Djava.security.auth.login.config="+ conf_dir +"/kafka_jaas.conf"
 else:
     kafka_kerberos_params = ''
@@ -274,7 +276,7 @@ if enable_ranger_kafka and is_supported_kafka_ranger:
   if len(custom_ranger_service_config) > 0:
     ranger_plugin_config.update(custom_ranger_service_config)
 
-  if stack_supports_ranger_kerberos and security_enabled:
+  if stack_supports_ranger_kerberos and kerberos_security_enabled:
     ranger_plugin_config['policy.download.auth.users'] = kafka_user
     ranger_plugin_config['tag.download.auth.users'] = kafka_user
     ranger_plugin_config['ambari.service.check.user'] = policy_user
@@ -335,7 +337,7 @@ HdfsResource = functools.partial(
   HdfsResource,
   user=hdfs_user,
   hdfs_resource_ignore_file = "/var/lib/ambari-agent/data/.hdfs_resource_ignore",
-  security_enabled = security_enabled,
+  security_enabled = kerberos_security_enabled,
   keytab = hdfs_user_keytab,
   kinit_path_local = kinit_path_local,
   hadoop_bin_dir = hadoop_bin_dir,

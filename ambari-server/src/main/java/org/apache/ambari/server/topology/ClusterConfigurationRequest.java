@@ -51,7 +51,7 @@ import org.slf4j.LoggerFactory;
  */
 public class ClusterConfigurationRequest {
 
-  protected final static Logger LOG = LoggerFactory.getLogger(ClusterConfigurationRequest.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ClusterConfigurationRequest.class);
 
   /**
    * a regular expression Pattern used to find "clusterHostInfo.(component_name)_host" placeholders in strings
@@ -82,7 +82,7 @@ public class ClusterConfigurationRequest {
     this.stackAdvisorBlueprintProcessor = stackAdvisorBlueprintProcessor;
     removeOrphanConfigTypes();
     if (setInitial) {
-      setConfigurationsOnCluster(clusterTopology, TopologyManager.INITIAL_CONFIG_TAG, Collections.<String>emptySet());
+      setConfigurationsOnCluster(clusterTopology, TopologyManager.INITIAL_CONFIG_TAG, Collections.emptySet());
     }
   }
 
@@ -240,7 +240,7 @@ public class ClusterConfigurationRequest {
         Collection<String> components = blueprint.getComponents(service);
         serviceComponents.put(service,
             (components == null)
-                ? Collections.<String>emptySet()
+                ? Collections.emptySet()
                 : new HashSet<>(blueprint.getComponents(service)));
       }
     }
@@ -304,7 +304,7 @@ public class ClusterConfigurationRequest {
 
       Configuration clusterConfiguration = clusterTopology.getConfiguration();
       Map<String, Map<String, String>> existingConfigurations = clusterConfiguration.getFullProperties();
-      existingConfigurations.put(CLUSTER_HOST_INFO, new HashMap<String, String>());
+      existingConfigurations.put(CLUSTER_HOST_INFO, new HashMap<>());
 
       // apply Kerberos specific configurations
       Map<String, Map<String, String>> updatedConfigs = AmbariContext.getController().getKerberosHelper()

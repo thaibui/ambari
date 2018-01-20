@@ -1165,7 +1165,7 @@ describe('App.WizardStep8Controller', function () {
         App.set('currentStackVersion', 'HDP-2.3');
         installerStep8Controller.reopen({content: {controllerName: 'installerController', installOptions: {localRepo: true}}});
         var data = {
-          data: JSON.stringify({ "Clusters": {"version": 'HDPLocal-2.3', "repository_version": "2.3.4.4-1234"}})
+          data: JSON.stringify({ "Clusters": {"version": 'HDPLocal-2.3'}})
         };
         installerStep8Controller.createCluster();
         expect(installerStep8Controller.addRequestToAjaxQueue.args[0][0].data.data).to.equal(data.data);
@@ -1175,7 +1175,7 @@ describe('App.WizardStep8Controller', function () {
         App.set('currentStackVersion', 'HDP-2.3');
         installerStep8Controller.reopen({content: {controllerName: 'installerController', installOptions: {localRepo: false}}});
         var data = {
-          data: JSON.stringify({ "Clusters": {"version": 'HDP-2.3', "repository_version": "2.3.4.4-1234"}})
+          data: JSON.stringify({ "Clusters": {"version": 'HDP-2.3'}})
         };
         installerStep8Controller.createCluster();
         expect(installerStep8Controller.addRequestToAjaxQueue.args[0][0].data.data).to.eql(data.data);
@@ -2086,8 +2086,9 @@ describe('App.WizardStep8Controller', function () {
     ];
 
     before(function () {
-      sinon.stub(App.StackServiceComponent, 'find').returns([
-        Em.Object.create({
+      var mock = sinon.stub(App.StackServiceComponent, 'find');
+      var components = [
+        App.StackServiceComponent.createRecord({
           componentName: 'c0',
           isMaster: true,
           dependencies: [
@@ -2105,7 +2106,7 @@ describe('App.WizardStep8Controller', function () {
             }
           ]
         }),
-        Em.Object.create({
+        App.StackServiceComponent.createRecord({
           componentName: 'c1',
           isMaster: true,
           dependencies: [
@@ -2123,7 +2124,7 @@ describe('App.WizardStep8Controller', function () {
             }
           ]
         }),
-        Em.Object.create({
+        App.StackServiceComponent.createRecord({
           componentName: 'c2',
           isMaster: true,
           dependencies: [
@@ -2141,14 +2142,14 @@ describe('App.WizardStep8Controller', function () {
             }
           ]
         }),
-        Em.Object.create({
+        App.StackServiceComponent.createRecord({
           componentName: 'c3',
           isMaster: true,
           dependencies: []
         }),
-        Em.Object.create({
+        App.StackServiceComponent.createRecord({
           componentName: 'c4',
-          isSlave: true,
+          componentCategory: 'SLAVE',
           dependencies: [
             {
               componentName: 'c1'
@@ -2164,9 +2165,9 @@ describe('App.WizardStep8Controller', function () {
             }
           ]
         }),
-        Em.Object.create({
+        App.StackServiceComponent.createRecord({
           componentName: 'c5',
-          isSlave: true,
+          componentCategory: 'SLAVE',
           dependencies: [
             {
               componentName: 'c4'
@@ -2182,9 +2183,9 @@ describe('App.WizardStep8Controller', function () {
             }
           ]
         }),
-        Em.Object.create({
+        App.StackServiceComponent.createRecord({
           componentName: 'c6',
-          isSlave: true,
+          componentCategory: 'SLAVE',
           dependencies: [
             {
               componentName: 'c1'
@@ -2200,12 +2201,12 @@ describe('App.WizardStep8Controller', function () {
             }
           ]
         }),
-        Em.Object.create({
+        App.StackServiceComponent.createRecord({
           componentName: 'c7',
-          isSlave: true,
+          componentCategory: 'SLAVE',
           dependencies: []
         }),
-        Em.Object.create({
+        App.StackServiceComponent.createRecord({
           componentName: 'c8',
           isClient: true,
           dependencies: [
@@ -2223,7 +2224,7 @@ describe('App.WizardStep8Controller', function () {
             }
           ]
         }),
-        Em.Object.create({
+        App.StackServiceComponent.createRecord({
           componentName: 'c9',
           isClient: true,
           dependencies: [
@@ -2241,7 +2242,7 @@ describe('App.WizardStep8Controller', function () {
             }
           ]
         }),
-        Em.Object.create({
+        App.StackServiceComponent.createRecord({
           componentName: 'c10',
           isClient: true,
           dependencies: [
@@ -2259,12 +2260,16 @@ describe('App.WizardStep8Controller', function () {
             }
           ]
         }),
-        Em.Object.create({
+        App.StackServiceComponent.createRecord({
           componentName: 'c11',
           isClient: true,
           dependencies: []
         })
-      ]);
+      ];
+      components.forEach(function(component) {
+        mock.withArgs(component.get('componentName')).returns(component);
+      });
+      mock.returns(components);
     });
 
     after(function () {

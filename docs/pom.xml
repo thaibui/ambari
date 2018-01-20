@@ -28,7 +28,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>org.apache.ambari</groupId>
-    <version>2.5.1</version>
+    <version>2.6.1</version>
     <artifactId>ambari</artifactId>
     <packaging>pom</packaging>
 
@@ -186,6 +186,18 @@
             </organization>
         </developer>
         <developer>
+            <id>amruta</id>
+            <name>Amruta R Borkar</name>
+            <email>amruta@apache.org</email>
+            <timezone></timezone>
+            <roles>
+                <role>Committer</role>
+            </roles>
+            <organization>
+                IBM
+            </organization>
+        </developer>
+        <developer>
             <id>aonishuk</id>
             <name>Andrew Onischuk</name>
             <email>aonishuk@apache.org</email>
@@ -196,7 +208,19 @@
             <organization>
                 Hortonworks
             </organization>
-        </developer>        
+        </developer>
+        <developer>
+            <id>anitajebaraj</id>
+            <name>Anita Jebaraj</name>
+            <email>anitajebaraj@apache.org</email>
+            <timezone></timezone>
+            <roles>
+                <role>Committer</role>
+            </roles>
+            <organization>
+                IBM
+            </organization>
+        </developer>
         <developer>
             <id>atkach</id>
             <name>Andrii Tkach</name>
@@ -362,6 +386,17 @@
             </organization>            
         </developer>
         <developer>
+            <id>dgergely</id>
+            <name>Daniel Gergely</name>
+            <email>dgergely</email>
+            <timezone>+1</timezone>
+            <roles>
+                <role>Committer</role>
+            </roles>
+            <organization>
+            </organization>
+        </developer>
+        <developer>
             <id>dillidorai</id>
             <name>Dilli Dorai</name>
             <email>dillidorai@apache.org</email>
@@ -503,7 +538,19 @@
             </roles>
             <organization>
             </organization>            
-        </developer>          
+        </developer>
+        <developer>
+            <id>ishanbha</id>
+            <name>Ishan Bhatt</name>
+            <email>ishanbha@apache.org</email>
+            <timezone>-8</timezone>
+            <roles>
+                <role>Committer</role>
+            </roles>
+            <organization>
+                Hortonworks
+            </organization>
+        </developer>
         <developer>
             <id>jagane</id>
             <name>Jagane Sundar</name>
@@ -744,6 +791,18 @@
             </organization>
         </developer>
         <developer>
+            <id>nishant</id>
+            <name>Nishant Bangarwa</name>
+            <email>nishant@apache.org</email>
+            <timezone>+5.5</timezone>
+            <roles>
+                <role>Committer</role>
+            </roles>
+            <organization>
+                Hortonworks
+            </organization>
+        </developer>
+        <developer>
             <id>nitiraj</id>
             <name>Nitiraj Rathore</name>
             <email>nitiraj@apache.org</email>
@@ -837,6 +896,18 @@
             </roles>
             <organization>
                 ITRenew Inc
+            </organization>
+        </developer>
+        <developer>
+            <id>qin</id>
+            <name>Qin Liu</name>
+            <email>qin@apache.org</email>
+            <timezone></timezone>
+            <roles>
+                <role>Committer</role>
+            </roles>
+            <organization>
+                IBM
             </organization>
         </developer>
         <developer>
@@ -1125,6 +1196,18 @@
             </organization>
         </developer>       
         <developer>
+            <id>vishalsuvagia</id>
+            <name>Vishal Suvagia</name>
+            <email>vishalsuvagia@apache.org</email>
+            <timezone></timezone>
+            <roles>
+                <role>Committer</role>
+            </roles>
+            <organization>
+                Hortonworks
+            </organization>
+        </developer>
+        <developer>
             <id>vsairam</id>
             <name>Venkata Sairam Lanka</name>
             <email>vsairam@apache.org</email>
@@ -1174,6 +1257,10 @@
       </developers>
       <contributors>
         <contributor>
+          <name>Sanket Shah</name>
+          <organization>Hortonworks</organization>
+        </contributor>
+        <contributor>
           <name>Newton Alex</name>
           <organization>Pivotal</organization>
         </contributor>
@@ -1212,10 +1299,6 @@
         <contributor>
           <name>Bradley Childs</name>
           <organization>Red Hat</organization>
-        </contributor>
-        <contributor>
-          <name>Alexander Denissov</name>
-          <organization>Pivotal</organization>
         </contributor>
         <contributor>
           <name>Nick Dimiduk</name>

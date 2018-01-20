@@ -22,13 +22,18 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.Properties;
 
+import org.apache.ambari.server.AmbariException;
 import org.apache.ambari.server.H2DatabaseCleaner;
 import org.apache.ambari.server.audit.AuditLoggerModule;
 import org.apache.ambari.server.configuration.Configuration;
 import org.apache.ambari.server.controller.ControllerModule;
+import org.apache.ambari.server.ldap.LdapModule;
+import org.apache.ambari.server.ldap.domain.AmbariLdapConfigurationKeys;
 import org.apache.ambari.server.orm.GuiceJpaInitializer;
 import org.apache.ambari.server.orm.dao.UserDAO;
+import org.apache.ambari.server.orm.entities.UserEntity;
 import org.apache.ambari.server.security.ClientSecurityType;
+import org.apache.ambari.server.security.authentication.InvalidUsernamePasswordCombinationException;
 import org.apache.directory.server.annotations.CreateLdapServer;
 import org.apache.directory.server.annotations.CreateTransport;
 import org.apache.directory.server.core.annotations.ApplyLdifFiles;
@@ -49,23 +54,23 @@ import com.google.inject.Injector;
 
 @RunWith(FrameworkRunner.class)
 @CreateDS(allowAnonAccess = true,
-    name = "AmbariLdapAuthenticationProviderForDNWithSpaceTest",
-    partitions = {
-        @CreatePartition(name = "Root",
-            suffix = "dc=the apache,dc=org",
-            contextEntry = @ContextEntry(
-                entryLdif =
-                    "dn: dc=the apache,dc=org\n" +
-                        "dc: the apache\n" +
-                        "objectClass: top\n" +
-                        "objectClass: domain\n\n" +
-                        "dn: dc=ambari,dc=the apache,dc=org\n" +
-                        "dc: ambari\n" +
-                        "objectClass: top\n" +
-                        "objectClass: domain\n\n"))
-    })
+  name = "AmbariLdapAuthenticationProviderForDNWithSpaceTest",
+  partitions = {
+    @CreatePartition(name = "Root",
+      suffix = "dc=the apache,dc=org",
+      contextEntry = @ContextEntry(
+        entryLdif =
+          "dn: dc=the apache,dc=org\n" +
+            "dc: the apache\n" +
+            "objectClass: top\n" +
+            "objectClass: domain\n\n" +
+            "dn: dc=ambari,dc=the apache,dc=org\n" +
+            "dc: ambari\n" +
+            "objectClass: top\n" +
+            "objectClass: domain\n\n"))
+  })
 @CreateLdapServer(allowAnonymousAccess = true,
-    transports = {@CreateTransport(protocol = "LDAP")})
+  transports = {@CreateTransport(protocol = "LDAP")})
 @ApplyLdifFiles("users_for_dn_with_space.ldif")
 public class AmbariLdapAuthenticationProviderForDNWithSpaceTest extends AmbariLdapAuthenticationProviderBaseTest {
 
@@ -83,12 +88,15 @@ public class AmbariLdapAuthenticationProviderForDNWithSpaceTest extends AmbariLd
 
   @Before
   public void setUp() throws Exception {
-    injector = Guice.createInjector(new ControllerModule(getTestProperties()), new AuditLoggerModule());
+    injector = Guice.createInjector(new ControllerModule(getTestProperties()), new AuditLoggerModule(), new LdapModule());
     injector.getInstance(GuiceJpaInitializer.class);
     injector.injectMembers(this);
 
     configuration.setClientSecurityType(ClientSecurityType.LDAP);
-    configuration.setProperty(Configuration.LDAP_PRIMARY_URL, "localhost:" + getLdapServer().getPort());
+    authenticationProvider.ldapConfiguration.setValueFor(AmbariLdapConfigurationKeys.SERVER_HOST, "localhost");
+    authenticationProvider.ldapConfiguration.setValueFor(AmbariLdapConfigurationKeys.SERVER_PORT, String.valueOf(getLdapServer().getPort()));
+    authenticationProvider.ldapConfiguration.setValueFor(AmbariLdapConfigurationKeys.USER_SEARCH_BASE, "dc=ambari,dc=the apache,dc=org");
+    authenticationProvider.ldapConfiguration.setValueFor(AmbariLdapConfigurationKeys.GROUP_BASE, "ou=the groups,dc=ambari,dc=the apache,dc=org");
   }
 
   @After
@@ -103,9 +111,25 @@ public class AmbariLdapAuthenticationProviderForDNWithSpaceTest extends AmbariLd
   }
 
   @Test
-  public void testAuthenticate() throws Exception {
-    assertNull("User alread exists in DB", userDAO.findLdapUserByName("the allowedUser"));
-    users.createUser("the allowedUser", "password", UserType.LDAP, true, false);
+  public void testAuthenticateMatchingDN() throws Exception {
+    testAuthenticate("uid=the allowedUser,ou=the people,dc=ambari,dc=the apache,dc=org");
+  }
+
+  @Test
+  public void testAuthenticateNullDN() throws Exception {
+    testAuthenticate(null);
+  }
+
+  @Test(expected = InvalidUsernamePasswordCombinationException.class)
+  public void testAuthenticateNonMatchingDN() throws Exception {
+    testAuthenticate("This is not a matching DN");
+  }
+
+  private void testAuthenticate(String dn) throws AmbariException {
+    assertNull("User already exists in DB", userDAO.findUserByName("the allowedUser"));
+    UserEntity userEntity = users.createUser("the allowedUser", null, null);
+    users.addLdapAuthentication(userEntity, dn);
+
     Authentication authentication = new UsernamePasswordAuthenticationToken("the allowedUser", "password");
     Authentication result = authenticationProvider.authenticate(authentication);
     assertTrue(result.isAuthenticated());
@@ -130,9 +154,6 @@ public class AmbariLdapAuthenticationProviderForDNWithSpaceTest extends AmbariLd
     properties.setProperty(Configuration.SERVER_VERSION_FILE.getKey(), "src/test/resources/version");
     properties.setProperty(Configuration.OS_VERSION.getKey(), "centos5");
     properties.setProperty(Configuration.SHARED_RESOURCES_DIR.getKey(), "src/test/resources/");
-    //make ambari detect active configuration
-    properties.setProperty(Configuration.LDAP_BASE_DN.getKey(), "dc=ambari,dc=the apache,dc=org");
-    properties.setProperty(Configuration.LDAP_GROUP_BASE.getKey(), "ou=the groups,dc=ambari,dc=the apache,dc=org");
     return properties;
   }
 }

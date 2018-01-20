@@ -44,7 +44,6 @@ import org.apache.ambari.server.controller.spi.ResourceAlreadyExistsException;
 import org.apache.ambari.server.controller.spi.ResourceProvider;
 import org.apache.ambari.server.controller.spi.SystemException;
 import org.apache.ambari.server.controller.spi.UnsupportedPropertyException;
-import org.apache.ambari.server.controller.utilities.PropertyHelper;
 import org.apache.ambari.server.orm.GuiceJpaInitializer;
 import org.apache.ambari.server.orm.InMemoryDefaultTestModule;
 import org.apache.ambari.server.orm.OrmTestHelper;
@@ -219,7 +218,7 @@ public class JMXHostProviderTest {
         "hdfs-site", "version1", configs, null);
       ClusterRequest crequest = new ClusterRequest(cluster.getClusterId(), clusterName, null, null);
       crequest.setDesiredConfig(Collections.singletonList(cr));
-      controller.updateClusters(Collections.singleton(crequest), new HashMap<String,String>());
+      controller.updateClusters(Collections.singleton(crequest), new HashMap<>());
 
     } else {
       Map<String, String> configs = new HashMap<>();
@@ -231,7 +230,7 @@ public class JMXHostProviderTest {
 
       ClusterRequest crequest = new ClusterRequest(cluster.getClusterId(), clusterName, null, null);
       crequest.setDesiredConfig(Collections.singletonList(cr));
-      controller.updateClusters(Collections.singleton(crequest), new HashMap<String,String>());
+      controller.updateClusters(Collections.singleton(crequest), new HashMap<>());
     }
   }
 
@@ -667,9 +666,7 @@ public class JMXHostProviderTest {
         maintenanceStateHelper, repositoryVersionDAO);
 
     ResourceProvider hostCompResourceProvider = new
-      HostComponentResourceProvider(PropertyHelper.getPropertyIds(Resource
-      .Type.HostComponent), PropertyHelper.getKeyPropertyIds(Resource.Type
-      .HostComponent), controller, injector);
+      HostComponentResourceProvider(controller, injector);
 
     ResourceProvider configResourceProvider = new ConfigurationResourceProvider(
         controller);

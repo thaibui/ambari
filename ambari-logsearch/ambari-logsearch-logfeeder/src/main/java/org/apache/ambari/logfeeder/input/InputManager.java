@@ -33,42 +33,25 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import com.google.common.annotations.VisibleForTesting;
+import org.apache.ambari.logfeeder.conf.LogFeederProps;
 import org.apache.ambari.logfeeder.metrics.MetricData;
 import org.apache.ambari.logfeeder.util.FileUtil;
 import org.apache.ambari.logfeeder.util.LogFeederUtil;
-import org.apache.ambari.logsearch.config.api.LogSearchPropertyDescription;
 import org.apache.commons.io.filefilter.WildcardFileFilter;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
 import org.apache.solr.common.util.Base64;
 
-import static org.apache.ambari.logfeeder.util.LogFeederUtil.LOGFEEDER_PROPERTIES_FILE;
+import javax.inject.Inject;
 
 public class InputManager {
   private static final Logger LOG = Logger.getLogger(InputManager.class);
 
-  public static final String DEFAULT_CHECKPOINT_EXTENSION = ".cp";
-  @LogSearchPropertyDescription(
-    name = "logfeeder.checkpoint.extension",
-    description = "The extension used for checkpoint files.",
-    examples = {"ckp"},
-    defaultValue = DEFAULT_CHECKPOINT_EXTENSION,
-    sources = {LOGFEEDER_PROPERTIES_FILE}
-  )
-  public static final String CHECKPOINT_EXTENSION_PROPERTY = "logfeeder.checkpoint.extension";
-  
-  @LogSearchPropertyDescription(
-    name = "logfeeder.checkpoint.folder",
-    description = "The folder wher checkpoint files are stored.",
-    examples = {"/etc/ambari-logsearch-logfeeder/conf/checkpoints"},
-    sources = {LOGFEEDER_PROPERTIES_FILE}
-  )
-  private static final String CHECKPOINT_FOLDER_PROPERTY = "logfeeder.checkpoint.folder";
-
   private static final String CHECKPOINT_SUBFOLDER_NAME = "logfeeder_checkpoints";
   
   private Map<String, List<Input>> inputs = new HashMap<>();
-  private Set<Input> notReadyList = new HashSet<Input>();
+  private Set<Input> notReadyList = new HashSet<>();
 
   private boolean isDrain = false;
 
@@ -78,6 +61,9 @@ public class InputManager {
   private MetricData filesCountMetric = new MetricData("input.files.count", true);
   
   private Thread inputIsReadyMonitor;
+
+  @Inject
+  private LogFeederProps logFeederProps;
 
   public List<Input> getInputList(String serviceName) {
     return inputs.get(serviceName);
@@ -138,11 +124,11 @@ public class InputManager {
   }
   
   private void initCheckPointSettings() {
-    checkPointExtension = LogFeederUtil.getStringProperty(CHECKPOINT_EXTENSION_PROPERTY, DEFAULT_CHECKPOINT_EXTENSION);
+    checkPointExtension = logFeederProps.getCheckPointExtension();
     LOG.info("Determining valid checkpoint folder");
     boolean isCheckPointFolderValid = false;
     // We need to keep track of the files we are reading.
-    String checkPointFolder = LogFeederUtil.getStringProperty(CHECKPOINT_FOLDER_PROPERTY);
+    String checkPointFolder = logFeederProps.getCheckpointFolder();
     if (!StringUtils.isEmpty(checkPointFolder)) {
       checkPointFolderFile = new File(checkPointFolder);
       isCheckPointFolderValid = verifyCheckPointFolder(checkPointFolderFile);
@@ -150,8 +136,7 @@ public class InputManager {
     
     if (!isCheckPointFolderValid) {
       // Let's use tmp folder
-      String tmpFolder = LogFeederUtil.getLogFeederTempDir();
-      checkPointFolderFile = new File(tmpFolder, CHECKPOINT_SUBFOLDER_NAME);
+      checkPointFolderFile = new File(logFeederProps.getTmpDir(), CHECKPOINT_SUBFOLDER_NAME);
       LOG.info("Checking if tmp folder can be used for checkpoints. Folder=" + checkPointFolderFile);
       isCheckPointFolderValid = verifyCheckPointFolder(checkPointFolderFile);
       if (isCheckPointFolderValid) {
@@ -204,7 +189,7 @@ public class InputManager {
   public void startInputs(String serviceName) {
     for (Input input : inputs.get(serviceName)) {
       try {
-        input.init();
+        input.init(logFeederProps);
         if (input.isReady()) {
           input.monitor();
         } else {
@@ -438,5 +423,14 @@ public class InputManager {
         }
       }
     }
+  }
+
+  @VisibleForTesting
+  public void setLogFeederProps(LogFeederProps logFeederProps) {
+    this.logFeederProps = logFeederProps;
+  }
+
+  public LogFeederProps getLogFeederProps() {
+    return logFeederProps;
   }
 }

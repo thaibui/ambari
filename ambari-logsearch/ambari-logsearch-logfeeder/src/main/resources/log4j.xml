@@ -23,12 +23,11 @@
     <param name="Target" value="System.out" />
     <layout class="org.apache.log4j.PatternLayout">
       <param name="ConversionPattern" value="%d [%t] %-5p %C{6} (%F:%L) - %m%n" />
-      <!-- <param name="ConversionPattern" value="%d [%t] %-5p %c %x - %m%n"/> -->
     </layout>
   </appender>
 
   <appender name="daily_rolling_file" class="org.apache.log4j.DailyRollingFileAppender"> 
-    <param name="file" value="logs/logsearch-logfeeder.log" /> 
+    <param name="file" value="target/logs/logsearch-logfeeder.log" />
     <param name="datePattern"  value="'.'yyyy-MM-dd" /> 
     <param name="append" value="true" /> 
     <layout class="org.apache.log4j.PatternLayout"> 
@@ -38,15 +37,13 @@
 
   <appender name="rolling_file_json"
     class="org.apache.ambari.logsearch.appender.LogsearchRollingFileAppender">
-    <param name="file" value="logs/logsearch-logfeeder.json" />
+    <param name="file" value="target/logs/logsearch-logfeeder.json" />
     <param name="append" value="true" />
     <param name="maxFileSize" value="10MB" />
     <param name="maxBackupIndex" value="10" />
     <layout class="org.apache.ambari.logsearch.appender.LogsearchConversion" />
-  </appender> 
- 
+  </appender>
 
-  <!-- Logs to suppress BEGIN -->
   <category name="org.apache.solr.common.cloud.ZkStateReader" additivity="false">
     <priority value="error" />
     <appender-ref ref="daily_rolling_file" />
@@ -56,19 +53,15 @@
     <priority value="fatal" />
     <appender-ref ref="daily_rolling_file" />
   </category>
-  <!-- Logs to suppress END -->
 
   <category name="org.apache.ambari.logfeeder" additivity="false">
     <priority value="INFO" />
-    <appender-ref ref="console" /> 
-    <!-- <appender-ref ref="daily_rolling_file" /> -->
-    <appender-ref ref="rolling_file_json"/>
+    <appender-ref ref="console" />
   </category>
 
   <root>
-    <priority value="warn" />
-    <!-- <appender-ref ref="console" /> -->
-    <!-- <appender-ref ref="daily_rolling_file" /> -->
+    <priority value="info"/>
+    <appender-ref ref="console"/>
   </root>
  
 </log4j:configuration>  

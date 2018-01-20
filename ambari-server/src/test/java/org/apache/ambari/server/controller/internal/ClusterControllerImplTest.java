@@ -887,22 +887,22 @@ public class ClusterControllerImplTest {
 
     expect(
         resourceProvider.checkPropertyIds(Collections.singleton(AlertHistoryResourceProvider.ALERT_HISTORY_HOSTNAME))).andReturn(
-        Collections.<String> emptySet()).anyTimes();
+        Collections.emptySet()).anyTimes();
 
     expect(
         resourceProvider.getResources(anyObject(Request.class),
             anyObject(Predicate.class))).andReturn(
-        Collections.<Resource> emptySet()).anyTimes();
+        Collections.emptySet()).anyTimes();
 
-    expect(resourceProvider.checkPropertyIds(EasyMock.<Set<String>>anyObject())).andReturn(
-        new HashSet<String>()).anyTimes();
+    expect(resourceProvider.checkPropertyIds(EasyMock.anyObject())).andReturn(
+      new HashSet<>()).anyTimes();
 
     // strict pageRequest mock to ensure that paging is not performed on
     // the result set
     PageRequest pageRequest = EasyMock.createStrictMock(PageRequest.class);
 
     SortRequest sortRequest = EasyMock.createStrictMock(SortRequest.class);
-    expect(sortRequest.getPropertyIds()).andReturn(new ArrayList<String>()).atLeastOnce();
+    expect(sortRequest.getPropertyIds()).andReturn(new ArrayList<>()).atLeastOnce();
 
     replay(providerModule, resourceProvider, pageRequest, sortRequest);
 
@@ -935,7 +935,7 @@ public class ClusterControllerImplTest {
     public TestProviderModule() {
 
       for (Resource.Type type : Resource.Type.values()) {
-        providers.put(type, new TestResourceProvider(type));
+        providers.put(type, new TestResourceProvider());
       }
       providers.put(Resource.Type.Cluster, new TestClusterResourceProvider());
       providers.put(Resource.Type.Host, new TestHostResourceProvider());
@@ -965,8 +965,8 @@ public class ClusterControllerImplTest {
 
   private static class TestResourceProvider extends AbstractResourceProvider {
 
-    private TestResourceProvider(Resource.Type type) {
-      super(PropertyHelper.getPropertyIds(type), PropertyHelper.getKeyPropertyIds(type));
+    private TestResourceProvider() {
+      super(new HashSet<>(), new HashMap<>());
     }
 
     private TestResourceProvider(Set<String> propertyIds, Map<Resource.Type, String> keyPropertyIds) {
@@ -1029,7 +1029,7 @@ public class ClusterControllerImplTest {
 
   private static class TestClusterResourceProvider extends TestResourceProvider {
     private TestClusterResourceProvider() {
-      super(Resource.Type.Cluster);
+      super(ClusterResourceProvider.propertyIds, ClusterResourceProvider.keyPropertyIds);
     }
 
     @Override
@@ -1038,7 +1038,7 @@ public class ClusterControllerImplTest {
 
       resource.setProperty(PropertyHelper.getPropertyId("Clusters", "cluster_name"), "cluster");
 
-      return Collections.<Resource>singleton(resource);
+      return Collections.singleton(resource);
     }
   }
 
@@ -1048,7 +1048,7 @@ public class ClusterControllerImplTest {
     private Predicate lastPredicate = null;
 
     private TestHostResourceProvider() {
-      super(Resource.Type.Host);
+      super(HostResourceProvider.propertyIds, HostResourceProvider.keyPropertyIds);
     }
 
     @Override
@@ -1143,7 +1143,7 @@ public class ClusterControllerImplTest {
 
   private static class TestStackResourceProvider extends TestResourceProvider {
     private TestStackResourceProvider() {
-      super(Resource.Type.Stack);
+      super(StackResourceProvider.propertyIds, StackResourceProvider.keyPropertyIds);
     }
 
     @Override
@@ -1159,7 +1159,7 @@ public class ClusterControllerImplTest {
 
   private static class TestStackVersionResourceProvider extends TestResourceProvider {
     private TestStackVersionResourceProvider() {
-      super(Resource.Type.StackVersion);
+      super(StackVersionResourceProvider.propertyIds, StackVersionResourceProvider.keyPropertyIds);
     }
 
     @Override

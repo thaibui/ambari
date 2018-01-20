@@ -1749,6 +1749,15 @@ class DefaultStackAdvisor(StackAdvisor):
     """
     return {"level": "ERROR", "message": message}
 
+  def getNotApplicableItem(self, message):
+    '''
+    Creates report about validation error that can not be ignored. 
+    UI should not allow the proceeding of work.
+    :param message: error description.
+    :return: report about error.
+    '''
+    return {"level": "NOT_APPLICABLE", "message": message}
+
   def getComponentHostNames(self, servicesDict, serviceName, componentName):
     for service in servicesDict["services"]:
       if service["StackServices"]["service_name"] == serviceName:
@@ -2031,12 +2040,12 @@ class DefaultStackAdvisor(StackAdvisor):
     If the property exists and is equal to "true", then is it enabled; otherwise is it assumed to be
     disabled.
 
+    This is an alias for stacks.stack_advisor.DefaultStackAdvisor#is_secured_cluster
+
     :param services: the services structure containing the current configurations
     :return: true if security is enabled; otherwise false
     """
-    return "cluster-env" in services["configurations"] \
-           and "security_enabled" in services["configurations"]["cluster-env"]["properties"] \
-           and services["configurations"]["cluster-env"]["properties"]["security_enabled"].lower() == "true"
+    return self.is_secured_cluster(services)
 
   def parseCardinality(self, cardinality, hostsCount):
     """

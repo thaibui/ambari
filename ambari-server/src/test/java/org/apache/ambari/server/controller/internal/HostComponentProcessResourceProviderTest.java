@@ -67,7 +67,7 @@ public class HostComponentProcessResourceProviderTest {
     Predicate predicate = pb.property(
         HostComponentProcessResourceProvider.HC_PROCESS_COMPONENT_NAME_ID).equals("comp1").toPredicate();
     
-    Request request = PropertyHelper.getReadRequest(Collections.<String>emptySet());
+    Request request = PropertyHelper.getReadRequest(Collections.emptySet());
     
     Set<Resource> resources = provider.getResources(request, predicate);
     
@@ -93,7 +93,7 @@ public class HostComponentProcessResourceProviderTest {
     Predicate predicate = pb.property(
         HostComponentProcessResourceProvider.HC_PROCESS_COMPONENT_NAME_ID).equals("comp1").toPredicate();
     
-    Request request = PropertyHelper.getReadRequest(Collections.<String>emptySet());
+    Request request = PropertyHelper.getReadRequest(Collections.emptySet());
     
     Set<Resource> resources = provider.getResources(request, predicate);
     
@@ -125,7 +125,7 @@ public class HostComponentProcessResourceProviderTest {
     Predicate predicate = pb.property(
         HostComponentProcessResourceProvider.HC_PROCESS_COMPONENT_NAME_ID).equals("comp1").toPredicate();
     
-    Request request = PropertyHelper.getReadRequest(Collections.<String>emptySet());
+    Request request = PropertyHelper.getReadRequest(Collections.emptySet());
     
     Set<Resource> resources = provider.getResources(request, predicate);
     
@@ -161,8 +161,6 @@ public class HostComponentProcessResourceProviderTest {
     
     ResourceProvider provider = AbstractControllerResourceProvider.getResourceProvider(
         type,
-        PropertyHelper.getPropertyIds(type),
-        PropertyHelper.getKeyPropertyIds(type),
         amc);
     
     return provider;

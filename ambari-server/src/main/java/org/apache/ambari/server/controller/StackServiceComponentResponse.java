@@ -89,6 +89,11 @@ public class StackServiceComponentResponse {
   private String decommissionAllowed;
 
   /**
+   * Whether the component supports rolling restart.
+   * */
+  private boolean rollingRestartSupported;
+
+  /**
    * auto deploy information
    */
   private AutoDeployInfo autoDeploy;
@@ -113,6 +118,11 @@ public class StackServiceComponentResponse {
   private String reassignAllowed;
 
   /**
+   * @see ComponentInfo#componentType
+   */
+  private String componentType;
+
+  /**
    * Constructor.
    *
    * @param component
@@ -133,6 +143,8 @@ public class StackServiceComponentResponse {
     bulkCommandsDisplayName = getBulkCommandsDisplayName(component);
     bulkCommandMasterComponentName = getBulkCommandsMasterComponentName(component);
     reassignAllowed = component.getReassignAllowed();
+    rollingRestartSupported = component.getRollingRestartSupported();
+    componentType = component.getComponentType();
 
     // the custom command names defined for this component
     List<CustomCommandDefinition> definitions = component.getCustomCommands();
@@ -410,6 +422,16 @@ public class StackServiceComponentResponse {
   }
 
   /**
+   * Get whether the component supports rolling restart
+   *
+   * @return whether the component supports rolling restart
+   */
+  @ApiModelProperty(name = "rollingRestartSupported")
+  public boolean isRollingRestartSupported(){
+    return rollingRestartSupported;
+  }
+
+  /**
    * Get whether the components can be reassigned.
    *
    * @return Whether the components can be reassigned
@@ -493,6 +515,10 @@ public class StackServiceComponentResponse {
   @ApiModelProperty(name = "bulk_commands_master_component_namen")
   public String getBulkCommandsMasterComponentName(){
     return bulkCommandMasterComponentName == null ? "":bulkCommandMasterComponentName;
+  }
+
+  public String getComponentType() {
+    return componentType;
   }
 
   /**

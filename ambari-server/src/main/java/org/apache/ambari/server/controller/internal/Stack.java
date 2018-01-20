@@ -18,10 +18,12 @@
 
 package org.apache.ambari.server.controller.internal;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -293,7 +295,7 @@ public class Stack {
   public Set<String> getExcludedConfigurationTypes(String service) {
     return excludedConfigurationTypes.containsKey(service) ?
         excludedConfigurationTypes.get(service) :
-        Collections.<String>emptySet();
+        Collections.emptySet();
   }
 
   /**
@@ -494,6 +496,18 @@ public class Stack {
         "Specified configuration type is not associated with any service: " + config);
   }
 
+  public List<String> getServicesForConfigType(String config) {
+    List<String> serviceNames = new ArrayList<>();
+    for (Map.Entry<String, Map<String, Map<String, ConfigProperty>>> entry : serviceConfigurations.entrySet()) {
+      Map<String, Map<String, ConfigProperty>> typeMap = entry.getValue();
+      String serviceName = entry.getKey();
+      if (typeMap.containsKey(config) && !getExcludedConfigurationTypes(serviceName).contains(config)) {
+        serviceNames.add(serviceName);
+      }
+    }
+    return serviceNames;
+  }
+
   /**
    * Return the dependencies specified for the given component.
    *
@@ -504,7 +518,7 @@ public class Stack {
   //todo: full dependency graph
   public Collection<DependencyInfo> getDependenciesForComponent(String component) {
     return dependencies.containsKey(component) ? dependencies.get(component) :
-        Collections.<DependencyInfo>emptySet();
+        Collections.emptySet();
   }
 
   /**
@@ -558,7 +572,7 @@ public class Stack {
         Map<String, Map<String, String>> stackTypeAttributes = getConfigurationAttributes(service, type);
         if (!stackTypeAttributes.isEmpty()) {
           if (! attributes.containsKey(type)) {
-            attributes.put(type, new HashMap<String, Map<String, String>>());
+            attributes.put(type, new HashMap<>());
           }
           Map<String, Map<String, String>> typeAttributes = attributes.get(type);
           for (Map.Entry<String, Map<String, String>> attribute : stackTypeAttributes.entrySet()) {
@@ -592,7 +606,7 @@ public class Stack {
         Map<String, Map<String, String>> stackTypeAttributes = getConfigurationAttributes(service, type);
         if (!stackTypeAttributes.isEmpty()) {
           if (! stackAttributes.containsKey(type)) {
-            stackAttributes.put(type, new HashMap<String, Map<String, String>>());
+            stackAttributes.put(type, new HashMap<>());
           }
           Map<String, Map<String, String>> typeAttrs = stackAttributes.get(type);
           for (Map.Entry<String, Map<String, String>> attribute : stackTypeAttributes.entrySet()) {
@@ -702,7 +716,7 @@ public class Stack {
     Set<String> configTypes = stackService.getConfigTypes().keySet();
     for (String configType: configTypes) {
       if (!mapServiceConfig.containsKey(configType)) {
-        mapServiceConfig.put(configType, Collections.<String, ConfigProperty>emptyMap());
+        mapServiceConfig.put(configType, Collections.emptyMap());
       }
     }
   }

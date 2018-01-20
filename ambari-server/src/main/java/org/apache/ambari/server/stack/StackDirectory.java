@@ -19,6 +19,7 @@
 package org.apache.ambari.server.stack;
 
 import java.io.File;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -28,7 +29,6 @@ import java.util.HashSet;
 import java.util.Map;
 
 import org.apache.ambari.server.AmbariException;
-import org.apache.ambari.server.api.services.AmbariMetaInfo;
 import org.apache.ambari.server.state.stack.ConfigUpgradePack;
 import org.apache.ambari.server.state.stack.RepositoryXml;
 import org.apache.ambari.server.state.stack.StackMetainfoXml;
@@ -47,10 +47,23 @@ import org.slf4j.LoggerFactory;
 //todo: Currently some are relative and some are absolute.
 //todo: Current values were dictated by the StackInfo expectations.
 public class StackDirectory extends StackDefinitionDirectory {
+  public static final String SERVICE_CONFIG_FOLDER_NAME = "configuration";
+  public static final String SERVICE_PROPERTIES_FOLDER_NAME = "properties";
+  public static final String SERVICE_THEMES_FOLDER_NAME = "themes";
+  public static final String SERVICE_QUICKLINKS_CONFIGURATIONS_FOLDER_NAME = "quicklinks";
+  public static final String SERVICE_CONFIG_FILE_NAME_POSTFIX = ".xml";
+  public static final String RCO_FILE_NAME = "role_command_order.json";
+  public static final String SERVICE_METRIC_FILE_NAME = "metrics.json";
+  public static final String SERVICE_ALERT_FILE_NAME = "alerts.json";
+  public static final String SERVICE_ADVISOR_FILE_NAME = "service_advisor.py";
   /**
-   * hooks directory path
+   * The filename for a Kerberos descriptor preconfigure file at either the stack or service level
    */
-  private String hooksDir;
+  public static final String KERBEROS_DESCRIPTOR_PRECONFIGURE_FILE_NAME = "kerberos_preconfigure.json";
+  /**
+   * Filename for theme file at service layer
+   */
+  public static final String SERVICE_THEME_FILE_NAME = "theme.json";
 
   /**
    * upgrades directory path
@@ -63,14 +76,9 @@ public class StackDirectory extends StackDefinitionDirectory {
   private String rcoFilePath;
 
   /**
-   * kerberos descriptor file path
+   * kerberos descriptor (preconfigure) file path
    */
-  private String kerberosDescriptorFilePath;
-
-  /**
-   * kerberos descriptor file path
-   */
-  private String widgetsDescriptorFilePath;
+  private String kerberosDescriptorPreconfigureFilePath;
 
   /**
    * repository file
@@ -112,10 +120,12 @@ public class StackDirectory extends StackDefinitionDirectory {
    */
   ModuleFileUnmarshaller unmarshaller = new ModuleFileUnmarshaller();
 
-  /**
-   * name of the hooks directory
-   */
-  public static final String HOOKS_FOLDER_NAME = "hooks";
+  public static final FilenameFilter FILENAME_FILTER = new FilenameFilter() {
+    @Override
+    public boolean accept(File dir, String s) {
+      return !(s.equals(".svn") || s.equals(".git"));
+    }
+  };
 
   /**
    * repository directory name
@@ -151,7 +161,7 @@ public class StackDirectory extends StackDefinitionDirectory {
   /**
    * Constructor.
    *
-   * @param directory  stack directory
+   * @param directory stack directory
    * @throws AmbariException if unable to parse the stack directory
    */
   public StackDirectory(String directory) throws AmbariException {
@@ -166,15 +176,6 @@ public class StackDirectory extends StackDefinitionDirectory {
    */
   public String getStackDirName() {
     return getDirectory().getParentFile().getName();
-  }
-
-  /**
-   * Obtain the hooks directory path.
-   *
-   * @return hooks directory path
-   */
-  public String getHooksDir() {
-    return hooksDir;
   }
 
   /**
@@ -196,21 +197,12 @@ public class StackDirectory extends StackDefinitionDirectory {
   }
 
   /**
-   * Obtain the path to the (stack-level) Kerberos descriptor file
+   * Obtain the path to the (stack-level) Kerberos descriptor pre-configuration file
    *
-   * @return the path to the (stack-level) Kerberos descriptor file
+   * @return the path to the (stack-level) Kerberos descriptor pre-configuration file
    */
-  public String getKerberosDescriptorFilePath() {
-    return kerberosDescriptorFilePath;
-  }
-
-  /**
-   * Obtain the path to the (stack-level) widgets descriptor file
-   *
-   * @return the path to the (stack-level) widgets descriptor file
-   */
-  public String getWidgetsDescriptorFilePath() {
-    return widgetsDescriptorFilePath;
+  public String getKerberosDescriptorPreconfigureFilePath() {
+    return kerberosDescriptorPreconfigureFilePath;
   }
 
   /**
@@ -281,27 +273,14 @@ public class StackDirectory extends StackDefinitionDirectory {
    */
   private void parsePath() throws AmbariException {
     Collection<String> subDirs = Arrays.asList(directory.list());
-    if (subDirs.contains(HOOKS_FOLDER_NAME)) {
-      // hooksDir is expected to be relative to stack root
-      hooksDir = getStackDirName() + File.separator + getName() +
-          File.separator + HOOKS_FOLDER_NAME;
-    } else {
-      LOG.debug("Hooks folder {}{}" + HOOKS_FOLDER_NAME + " does not exist", getAbsolutePath(), File.separator);
-    }
-
-    if (subDirs.contains(AmbariMetaInfo.RCO_FILE_NAME)) {
+    if (subDirs.contains(RCO_FILE_NAME)) {
       // rcoFile is expected to be absolute
-      rcoFilePath = getAbsolutePath() + File.separator + AmbariMetaInfo.RCO_FILE_NAME;
+      rcoFilePath = getAbsolutePath() + File.separator + RCO_FILE_NAME;
     }
 
-
-    if (subDirs.contains(AmbariMetaInfo.KERBEROS_DESCRIPTOR_FILE_NAME)) {
-      // kerberosDescriptorFilePath is expected to be absolute
-      kerberosDescriptorFilePath = getAbsolutePath() + File.separator + AmbariMetaInfo.KERBEROS_DESCRIPTOR_FILE_NAME;
-    }
-
-    if (subDirs.contains(AmbariMetaInfo.WIDGETS_DESCRIPTOR_FILE_NAME)) {
-      widgetsDescriptorFilePath = getAbsolutePath() + File.separator + AmbariMetaInfo.WIDGETS_DESCRIPTOR_FILE_NAME;
+    if (subDirs.contains(KERBEROS_DESCRIPTOR_PRECONFIGURE_FILE_NAME)) {
+      // kerberosDescriptorPreconfigureFilePath is expected to be absolute
+      kerberosDescriptorPreconfigureFilePath = getAbsolutePath() + File.separator + KERBEROS_DESCRIPTOR_PRECONFIGURE_FILE_NAME;
     }
 
     parseUpgradePacks(subDirs);
@@ -350,7 +329,7 @@ public class StackDirectory extends StackDefinitionDirectory {
         metaInfoXml = new StackMetainfoXml();
         metaInfoXml.setValid(false);
         String msg = "Unable to parse stack metainfo.xml file at location: " +
-                     stackMetaInfoFile.getAbsolutePath();
+            stackMetaInfoFile.getAbsolutePath();
         metaInfoXml.addError(msg);
         LOG.warn(msg);
       }
@@ -360,8 +339,8 @@ public class StackDirectory extends StackDefinitionDirectory {
   /**
    * Parse the stacks service directories.
    *
-   * @param subDirs  stack sub directories
-   * @throws AmbariException  if unable to parse the service directories
+   * @param subDirs stack sub directories
+   * @throws AmbariException if unable to parse the service directories
    */
   private void parseServiceDirectories(Collection<String> subDirs) throws AmbariException {
     Collection<ServiceDirectory> dirs = new HashSet<>();
@@ -369,7 +348,7 @@ public class StackDirectory extends StackDefinitionDirectory {
     if (subDirs.contains(ServiceDirectory.SERVICES_FOLDER_NAME)) {
       String servicesDir = getAbsolutePath() + File.separator + ServiceDirectory.SERVICES_FOLDER_NAME;
       File baseServiceDir = new File(servicesDir);
-      File[] serviceFolders = baseServiceDir.listFiles(AmbariMetaInfo.FILENAME_FILTER);
+      File[] serviceFolders = baseServiceDir.listFiles(FILENAME_FILTER);
       if (serviceFolders != null) {
         for (File d : serviceFolders) {
           if (d.isDirectory()) {
@@ -411,12 +390,10 @@ public class StackDirectory extends StackDefinitionDirectory {
           if (upgradeFile.getName().toLowerCase().startsWith(CONFIG_UPGRADE_XML_FILENAME_PREFIX)) {
             if (configUpgradePack == null) {
               configUpgradePack = parseConfigUpgradePack(upgradeFile);
-            }
-            else { // If user messed things up with lower/upper case filenames
+            } else { // If user messed things up with lower/upper case filenames
               throw new AmbariException(String.format("There are multiple files with name like %s" + upgradeFile.getAbsolutePath()));
             }
-          }
-          else {
+          } else {
             String upgradePackName = FilenameUtils.removeExtension(upgradeFile.getName());
             UpgradePack pack = parseUpgradePack(upgradePackName, upgradeFile);
             pack.setName(upgradePackName);
@@ -449,8 +426,7 @@ public class StackDirectory extends StackDefinitionDirectory {
     try {
       pack = unmarshaller.unmarshal(UpgradePack.class, upgradeFile);
       pack.setName(packName);
-    }
-    catch (Exception e) {
+    } catch (Exception e) {
       if (upgradeFile == null) {
         throw new AmbariException("Null upgrade pack");
       }
@@ -463,8 +439,7 @@ public class StackDirectory extends StackDefinitionDirectory {
     ConfigUpgradePack pack = null;
     try {
       pack = unmarshaller.unmarshal(ConfigUpgradePack.class, upgradeFile);
-    }
-    catch (Exception e) {
+    } catch (Exception e) {
       if (upgradeFile == null) {
         throw new AmbariException("Null config upgrade pack");
       }
@@ -480,7 +455,8 @@ public class StackDirectory extends StackDefinitionDirectory {
     HashMap<String, Object> result = null;
     ObjectMapper mapper = new ObjectMapper();
     try {
-      TypeReference<Map<String, Object>> rcoElementTypeReference = new TypeReference<Map<String, Object>>() {};
+      TypeReference<Map<String, Object>> rcoElementTypeReference = new TypeReference<Map<String, Object>>() {
+      };
       if (rcoFilePath != null) {
         File file = new File(rcoFilePath);
         result = mapper.readValue(file, rcoElementTypeReference);

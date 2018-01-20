@@ -139,8 +139,8 @@ public class UpgradeUserKerberosDescriptorTest {
     PowerMockito.mockStatic(KerberosDescriptorUpdateHelper.class);
     PowerMockito.when(KerberosDescriptorUpdateHelper.updateUserKerberosDescriptor(previousDescriptor, newDescriptor, userDescriptor)).thenReturn(updatedKerberosDescriptor);
     expect(kerberosDescriptorFactory.createInstance((Map)null)).andReturn(userDescriptor).atLeastOnce();
-    expect(ambariMetaInfo.getKerberosDescriptor("HDP","2.5")).andReturn(newDescriptor).atLeastOnce();
-    expect(ambariMetaInfo.getKerberosDescriptor("HDP","2.4")).andReturn(previousDescriptor).atLeastOnce();
+    expect(ambariMetaInfo.getKerberosDescriptor("HDP","2.5", false)).andReturn(newDescriptor).atLeastOnce();
+    expect(ambariMetaInfo.getKerberosDescriptor("HDP","2.4",false)).andReturn(previousDescriptor).atLeastOnce();
 
 
     expect(updatedKerberosDescriptor.toMap()).andReturn(null).once();
@@ -213,7 +213,7 @@ public class UpgradeUserKerberosDescriptorTest {
   }
 
   private void prepareFields() throws NoSuchFieldException {
-    String[] fieldsNames = { "artifactDAO", "clusters", "ambariMetaInfo",
+    String[] fieldsNames = { "artifactDAO", "m_clusters", "ambariMetaInfo",
         "kerberosDescriptorFactory", "m_upgradeContextFactory" };
 
     for (String fieldName : fieldsNames) {
@@ -224,13 +224,13 @@ public class UpgradeUserKerberosDescriptorTest {
       } catch( NoSuchFieldException noSuchFieldException ){
         Field clustersField = UpgradeUserKerberosDescriptor.class.getSuperclass().getDeclaredField(fieldName);
         clustersField.setAccessible(true);
-        fields.put(fieldName, clustersField);        
+        fields.put(fieldName, clustersField);
       }
     }
   }
   private void injectFields(UpgradeUserKerberosDescriptor action) throws IllegalAccessException {
     fields.get("artifactDAO").set(action, artifactDAO);
-    fields.get("clusters").set(action, clusters);
+    fields.get("m_clusters").set(action, clusters);
     fields.get("ambariMetaInfo").set(action, ambariMetaInfo);
     fields.get("kerberosDescriptorFactory").set(action, kerberosDescriptorFactory);
     fields.get("m_upgradeContextFactory").set(action, upgradeContextFactory);

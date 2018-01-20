@@ -36,18 +36,18 @@ from resource_management.libraries.functions import get_kinit_path
 from resource_management.libraries.functions.get_not_managed_resources import get_not_managed_resources
 from resource_management.libraries.script.script import Script
 from resource_management.libraries.functions import StackFeature
+from resource_management.libraries.functions import stack_select
 from resource_management.libraries.functions.stack_features import check_stack_feature
 from resource_management.libraries.functions.stack_features import get_stack_feature_version
+from resource_management.libraries.functions import upgrade_summary
 from resource_management.libraries.functions.get_port_from_url import get_port_from_url
 from resource_management.libraries.functions.expect import expect
 from resource_management.libraries import functions
-from resource_management.libraries.functions.setup_atlas_hook import has_atlas_in_cluster
-from ambari_commons.ambari_metrics_helper import select_metric_collector_hosts_from_hostnames
 from resource_management.libraries.functions.setup_ranger_plugin_xml import get_audit_configs, generate_ranger_service_config
 from resource_management.libraries.functions.get_architecture import get_architecture
 
 from resource_management.core.utils import PasswordString
-from resource_management.core.shell import checked_call
+from resource_management.core.exceptions import Fail
 from ambari_commons.credential_store_helper import get_password_from_credential_store
 
 # Default log4j version; put config files under /etc/hive/conf
@@ -86,12 +86,9 @@ stack_version_formatted = functions.get_stack_version('hive-server2')
 # It cannot be used during the initial Cluser Install because the version is not yet known.
 version = default("/commandParams/version", None)
 
-# current host stack version
-current_version = default("/hostLevelParams/current_version", None)
-
-# When downgrading the 'version' and 'current_version' are both pointing to the downgrade-target version
+# When downgrading the 'version' is pointing to the downgrade-target version
 # downgrade_from_version provides the source-version the downgrade is happening from
-downgrade_from_version = default("/commandParams/downgrade_from_version", None)
+downgrade_from_version = upgrade_summary.get_downgrade_from_version("HIVE")
 
 # get the correct version to use for checking stack features
 version_for_stack_feature_checks = get_stack_feature_version(config)
@@ -108,8 +105,11 @@ stack_supports_hive_interactive_ga = check_stack_feature(StackFeature.HIVE_INTER
 component_directory = status_params.component_directory
 component_directory_interactive = status_params.component_directory_interactive
 
-hadoop_home = format('{stack_root}/current/hadoop-client')
+hadoop_home = stack_select.get_hadoop_dir("home")
+hadoop_lib_home = stack_select.get_hadoop_dir("lib")
+
 hive_bin = format('{stack_root}/current/{component_directory}/bin')
+hive_cmd = os.path.join(hive_bin, "hive")
 hive_schematool_ver_bin = format('{stack_root}/{version}/hive/bin')
 hive_schematool_bin = format('{stack_root}/current/{component_directory}/bin')
 hive_lib = format('{stack_root}/current/{component_directory}/lib')
@@ -184,8 +184,6 @@ hive_server_conf_dir = status_params.hive_server_conf_dir
 
 hcat_conf_dir = '/etc/hive-hcatalog/conf'
 config_dir = '/etc/hive-webhcat/conf'
-hcat_lib = '/usr/lib/hive-hcatalog/share/hcatalog'
-webhcat_bin_dir = '/usr/lib/hive-hcatalog/sbin'
 
 # there are no client versions of these, use server versions directly
 hcat_lib = format('{stack_root}/current/hive-webhcat/share/hcatalog')
@@ -288,6 +286,7 @@ elif hive_jdbc_driver == "sap.jdbc4.sqlanywhere.IDriver":
   jdbc_jar_name = default("/hostLevelParams/custom_sqlanywhere_jdbc_name", None)
   hive_previous_jdbc_jar_name = default("/hostLevelParams/previous_custom_sqlanywhere_jdbc_name", None)
   sqla_db_used = True
+else: raise Fail(format("JDBC driver '{hive_jdbc_driver}' not supported."))
 
 default_mysql_jar_name = "mysql-connector-java.jar"
 default_mysql_target = format("{hive_lib}/{default_mysql_jar_name}")
@@ -315,7 +314,8 @@ driver_curl_source = format("{jdk_location}/{jdbc_jar_name}")
 # normally, the JDBC driver would be referenced by <stack-root>/current/.../foo.jar
 # but in RU if <stack-selector-tool> is called and the restart fails, then this means that current pointer
 # is now pointing to the upgraded version location; that's bad for the cp command
-source_jdbc_file = format("{stack_root}/{current_version}/hive/lib/{jdbc_jar_name}")
+version_for_source_jdbc_file = upgrade_summary.get_source_version(default_version = version_for_stack_feature_checks)
+source_jdbc_file = format("{stack_root}/{version_for_source_jdbc_file}/hive/lib/{jdbc_jar_name}")
 
 check_db_connection_jar_name = "DBConnectionVerification.jar"
 check_db_connection_jar = format("/usr/lib/ambari-agent/{check_db_connection_jar_name}")
@@ -847,3 +847,7 @@ ranger_hive_metastore_lookup = default('/configurations/ranger-hive-plugin-prope
 
 if security_enabled:
   hive_metastore_principal_with_host = hive_metastore_principal.replace('_HOST', hostname.lower())
+
+# replication directories
+hive_repl_cmrootdir = default('/configurations/hive-site/hive.repl.cmrootdir', None)
+hive_repl_rootdir = default('/configurations/hive-site/hive.repl.rootdir', None)

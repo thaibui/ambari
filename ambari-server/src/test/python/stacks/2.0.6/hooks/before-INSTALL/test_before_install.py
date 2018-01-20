@@ -27,9 +27,13 @@ import json
 @patch.object(getpass, "getuser", new = MagicMock(return_value='some_user'))
 @patch.object(Hook, "run_custom_hook", new = MagicMock())
 class TestHookBeforeInstall(RMFTestCase):
+  STACK_VERSION = '2.0.6'
+
   def test_hook_default(self):
-    self.executeScript("2.0.6/hooks/before-INSTALL/scripts/hook.py",
+    self.executeScript("before-INSTALL/scripts/hook.py",
                        classname="BeforeInstallHook",
+                       stack_version = self.STACK_VERSION,
+                       target=RMFTestCase.TARGET_STACK_HOOKS,
                        command="hook",
                        config_file="default.json"
     )
@@ -41,6 +45,16 @@ class TestHookBeforeInstall(RMFTestCase):
         repo_file_name='HDP',
         repo_template='[{{repo_id}}]\nname={{repo_id}}\n{% if mirror_list %}mirrorlist={{mirror_list}}{% else %}baseurl={{base_url}}{% endif %}\n\npath=/\nenabled=1\ngpgcheck=0'
     )
+
+    self.assertResourceCalled('Repository', 'KIBANA-4.5',
+        action=['create'],
+        base_url='http://packages.elastic.co/kibana/4.5/debian',
+        components=['stable', 'com1 com2'],
+        mirror_list=None,
+        repo_file_name='KIBANA',
+        repo_template='[{{repo_id}}]\nname={{repo_id}}\n{% if mirror_list %}mirrorlist={{mirror_list}}{% else %}baseurl={{base_url}}{% endif %}\n\npath=/\nenabled=1\ngpgcheck=0'
+    )
+
     self.assertResourceCalled('Package', 'unzip', retry_count=5, retry_on_repo_unavailability=False)
     self.assertResourceCalled('Package', 'curl', retry_count=5, retry_on_repo_unavailability=False)
     self.assertNoMoreResources()
@@ -53,9 +67,11 @@ class TestHookBeforeInstall(RMFTestCase):
 
     command_json['hostLevelParams']['repo_info'] = "[]"
 
-    self.executeScript("2.0.6/hooks/before-INSTALL/scripts/hook.py",
+    self.executeScript("before-INSTALL/scripts/hook.py",
                        classname="BeforeInstallHook",
                        command="hook",
+                       stack_version = self.STACK_VERSION,
+                       target=RMFTestCase.TARGET_STACK_HOOKS,
                        config_dict=command_json)
 
     self.assertResourceCalled('Package', 'unzip', retry_count=5, retry_on_repo_unavailability=False)
@@ -65,9 +81,11 @@ class TestHookBeforeInstall(RMFTestCase):
 
 
   def test_hook_default_repository_file(self):
-    self.executeScript("2.0.6/hooks/before-INSTALL/scripts/hook.py",
+    self.executeScript("before-INSTALL/scripts/hook.py",
                        classname="BeforeInstallHook",
                        command="hook",
+                       stack_version = self.STACK_VERSION,
+                       target=RMFTestCase.TARGET_STACK_HOOKS,
                        config_file="repository_file.json"
     )
     self.assertResourceCalled('Repository', 'HDP-2.2-repo-4',

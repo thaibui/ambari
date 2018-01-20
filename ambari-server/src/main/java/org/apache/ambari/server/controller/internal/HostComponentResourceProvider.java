@@ -18,7 +18,6 @@
 package org.apache.ambari.server.controller.internal;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -66,7 +65,11 @@ import org.apache.ambari.server.state.svccomphost.ServiceComponentHostDisableEve
 import org.apache.ambari.server.state.svccomphost.ServiceComponentHostRestoreEvent;
 import org.apache.ambari.server.topology.Setting;
 import org.apache.commons.lang.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Sets;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.google.inject.assistedinject.Assisted;
@@ -77,9 +80,13 @@ import com.google.inject.assistedinject.AssistedInject;
  */
 public class HostComponentResourceProvider extends AbstractControllerResourceProvider {
 
+  private static final Logger LOG = LoggerFactory.getLogger(HostComponentResourceProvider.class);
+
   // ----- Property ID constants ---------------------------------------------
 
   // Host Components
+  public static final String HOST_COMPONENT_ROLE_ID
+      = PropertyHelper.getPropertyId("HostRoles", "role_id");
   public static final String HOST_COMPONENT_CLUSTER_NAME_PROPERTY_ID
       = PropertyHelper.getPropertyId("HostRoles", "cluster_name");
   public static final String HOST_COMPONENT_SERVICE_NAME_PROPERTY_ID
@@ -106,6 +113,8 @@ public class HostComponentResourceProvider extends AbstractControllerResourcePro
       = PropertyHelper.getPropertyId("HostRoles", "actual_configs");
   public static final String HOST_COMPONENT_STALE_CONFIGS_PROPERTY_ID
       = PropertyHelper.getPropertyId("HostRoles", "stale_configs");
+  public static final String HOST_COMPONENT_RELOAD_CONFIGS_PROPERTY_ID
+      = PropertyHelper.getPropertyId("HostRoles", "reload_configs");
   public static final String HOST_COMPONENT_DESIRED_ADMIN_STATE_PROPERTY_ID
       = PropertyHelper.getPropertyId("HostRoles", "desired_admin_state");
   public static final String HOST_COMPONENT_MAINTENANCE_STATE_PROPERTY_ID
@@ -114,12 +123,40 @@ public class HostComponentResourceProvider extends AbstractControllerResourcePro
 
   //Parameters from the predicate
   private static final String QUERY_PARAMETERS_RUN_SMOKE_TEST_ID = "params/run_smoke_test";
-  private static Set<String> pkPropertyIds =
-    new HashSet<>(Arrays.asList(new String[]{
+
+  /**
+   * The key property ids for a HostComponent resource.
+   */
+  public static Map<Resource.Type, String> keyPropertyIds = ImmutableMap.<Resource.Type, String>builder()
+      .put(Resource.Type.Cluster, HOST_COMPONENT_CLUSTER_NAME_PROPERTY_ID)
+      .put(Resource.Type.Host, HOST_COMPONENT_HOST_NAME_PROPERTY_ID)
+      .put(Resource.Type.HostComponent, HOST_COMPONENT_COMPONENT_NAME_PROPERTY_ID)
+      .put(Resource.Type.Component, HOST_COMPONENT_COMPONENT_NAME_PROPERTY_ID)
+      .build();
+
+  /**
+   * The property ids for a HostComponent resource.
+   */
+  protected static Set<String> propertyIds = Sets.newHashSet(
+      HOST_COMPONENT_ROLE_ID,
       HOST_COMPONENT_CLUSTER_NAME_PROPERTY_ID,
       HOST_COMPONENT_SERVICE_NAME_PROPERTY_ID,
       HOST_COMPONENT_COMPONENT_NAME_PROPERTY_ID,
-      HOST_COMPONENT_HOST_NAME_PROPERTY_ID}));
+      HOST_COMPONENT_DISPLAY_NAME_PROPERTY_ID,
+      HOST_COMPONENT_HOST_NAME_PROPERTY_ID,
+      HOST_COMPONENT_PUBLIC_HOST_NAME_PROPERTY_ID,
+      HOST_COMPONENT_STATE_PROPERTY_ID,
+      HOST_COMPONENT_DESIRED_STATE_PROPERTY_ID,
+      HOST_COMPONENT_VERSION_PROPERTY_ID,
+      HOST_COMPONENT_DESIRED_STACK_ID_PROPERTY_ID,
+      HOST_COMPONENT_DESIRED_REPOSITORY_VERSION,
+      HOST_COMPONENT_ACTUAL_CONFIGS_PROPERTY_ID,
+      HOST_COMPONENT_STALE_CONFIGS_PROPERTY_ID,
+      HOST_COMPONENT_RELOAD_CONFIGS_PROPERTY_ID,
+      HOST_COMPONENT_DESIRED_ADMIN_STATE_PROPERTY_ID,
+      HOST_COMPONENT_MAINTENANCE_STATE_PROPERTY_ID,
+      HOST_COMPONENT_UPGRADE_STATE_PROPERTY_ID,
+      QUERY_PARAMETERS_RUN_SMOKE_TEST_ID);
 
   /**
    * maintenance state helper
@@ -135,16 +172,12 @@ public class HostComponentResourceProvider extends AbstractControllerResourcePro
   /**
    * Create a  new resource provider for the given management controller.
    *
-   * @param propertyIds          the property ids
-   * @param keyPropertyIds       the key property ids
    * @param managementController the management controller
    */
   @AssistedInject
-  public HostComponentResourceProvider(@Assisted Set<String> propertyIds,
-                                       @Assisted Map<Resource.Type, String> keyPropertyIds,
-                                       @Assisted AmbariManagementController managementController,
+  public HostComponentResourceProvider(@Assisted AmbariManagementController managementController,
                                        Injector injector) {
-    super(propertyIds, keyPropertyIds, managementController);
+    super(Resource.Type.HostComponent, propertyIds, keyPropertyIds, managementController);
 
     setRequiredCreateAuthorizations(EnumSet.of(RoleAuthorization.SERVICE_ADD_DELETE_SERVICES,RoleAuthorization.HOST_ADD_DELETE_COMPONENTS));
     setRequiredDeleteAuthorizations(EnumSet.of(RoleAuthorization.SERVICE_ADD_DELETE_SERVICES,RoleAuthorization.HOST_ADD_DELETE_COMPONENTS));
@@ -244,6 +277,8 @@ public class HostComponentResourceProvider extends AbstractControllerResourcePro
               response.getActualConfigs(), requestedIds);
       setResourceProperty(resource, HOST_COMPONENT_STALE_CONFIGS_PROPERTY_ID,
               response.isStaleConfig(), requestedIds);
+      setResourceProperty(resource, HOST_COMPONENT_RELOAD_CONFIGS_PROPERTY_ID,
+              response.isReloadConfig(), requestedIds);
       setResourceProperty(resource, HOST_COMPONENT_UPGRADE_STATE_PROPERTY_ID,
               response.getUpgradeState(), requestedIds);
       setResourceProperty(resource, HOST_COMPONENT_DESIRED_REPOSITORY_VERSION,
@@ -377,7 +412,7 @@ public class HostComponentResourceProvider extends AbstractControllerResourcePro
   public RequestStatusResponse start(String cluster, String hostName) throws  SystemException,
     UnsupportedPropertyException, NoSuchParentResourceException {
 
-    return this.start(cluster, hostName, Collections.<String>emptySet(), false);
+    return this.start(cluster, hostName, Collections.emptySet(), false);
   }
 
   public RequestStatusResponse start(String cluster, String hostName, Collection<String> installOnlyComponents, boolean skipFailure) throws  SystemException,
@@ -632,12 +667,10 @@ public class HostComponentResourceProvider extends AbstractControllerResourcePro
         directTransitionScHosts.put(sch, newState);
       } else {
         if (!changedScHosts.containsKey(sc.getName())) {
-          changedScHosts.put(sc.getName(),
-              new EnumMap<State, List<ServiceComponentHost>>(State.class));
+          changedScHosts.put(sc.getName(), new EnumMap<>(State.class));
         }
         if (!changedScHosts.get(sc.getName()).containsKey(newState)) {
-          changedScHosts.get(sc.getName()).put(newState,
-              new ArrayList<ServiceComponentHost>());
+          changedScHosts.get(sc.getName()).put(newState, new ArrayList<>());
         }
         LOG.info(getServiceComponentRequestInfoLogMessage("Handling update to host component", request, oldState, newState));
         changedScHosts.get(sc.getName()).get(newState).add(sch);
@@ -656,7 +689,7 @@ public class HostComponentResourceProvider extends AbstractControllerResourcePro
 
   @Override
   protected Set<String> getPKPropertyIds() {
-    return pkPropertyIds;
+    return new HashSet<>(keyPropertyIds.values());
   }
 
 

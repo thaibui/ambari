@@ -30,6 +30,9 @@ import static org.apache.ambari.server.agent.DummyHeartbeatConstants.HDFS;
 import static org.apache.ambari.server.agent.DummyHeartbeatConstants.HDFS_CLIENT;
 import static org.apache.ambari.server.agent.DummyHeartbeatConstants.NAMENODE;
 import static org.apache.ambari.server.agent.DummyHeartbeatConstants.SECONDARY_NAMENODE;
+import static org.apache.ambari.server.controller.KerberosHelperImpl.REMOVE_KEYTAB;
+import static org.apache.ambari.server.controller.KerberosHelperImpl.SET_KEYTAB;
+import static org.easymock.EasyMock.createMock;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
@@ -46,6 +49,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -78,8 +82,10 @@ import org.apache.ambari.server.orm.InMemoryDefaultTestModule;
 import org.apache.ambari.server.orm.OrmTestHelper;
 import org.apache.ambari.server.orm.entities.RepositoryVersionEntity;
 import org.apache.ambari.server.serveraction.kerberos.KerberosIdentityDataFileWriter;
-import org.apache.ambari.server.serveraction.kerberos.KerberosIdentityDataFileWriterFactory;
 import org.apache.ambari.server.serveraction.kerberos.KerberosServerAction;
+import org.apache.ambari.server.serveraction.kerberos.stageutils.KerberosKeytabController;
+import org.apache.ambari.server.serveraction.kerberos.stageutils.ResolvedKerberosKeytab;
+import org.apache.ambari.server.serveraction.kerberos.stageutils.ResolvedKerberosPrincipal;
 import org.apache.ambari.server.state.Alert;
 import org.apache.ambari.server.state.Cluster;
 import org.apache.ambari.server.state.Clusters;
@@ -87,7 +93,6 @@ import org.apache.ambari.server.state.Host;
 import org.apache.ambari.server.state.HostHealthStatus;
 import org.apache.ambari.server.state.HostState;
 import org.apache.ambari.server.state.MaintenanceState;
-import org.apache.ambari.server.state.SecurityState;
 import org.apache.ambari.server.state.Service;
 import org.apache.ambari.server.state.ServiceComponent;
 import org.apache.ambari.server.state.ServiceComponentHost;
@@ -108,6 +113,7 @@ import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.collect.Sets;
 import com.google.inject.Guice;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
@@ -174,7 +180,7 @@ public class TestHeartbeatHandler {
   @Test
   public void testHeartbeat() throws Exception {
     ActionManager am = actionManagerTestHelper.getMockActionManager();
-    expect(am.getTasks(EasyMock.<List<Long>>anyObject())).andReturn(new ArrayList<HostRoleCommand>());
+    expect(am.getTasks(EasyMock.<List<Long>>anyObject())).andReturn(new ArrayList<>());
     replay(am);
 
     Cluster cluster = heartbeatTestHelper.getDummyCluster();
@@ -241,7 +247,7 @@ public class TestHeartbeatHandler {
     hb.setResponseId(0);
     hb.setHostname(DummyHostname1);
     hb.setNodeStatus(new HostStatus(Status.HEALTHY, DummyHostStatus));
-    hb.setReports(new ArrayList<CommandReport>());
+    hb.setReports(new ArrayList<>());
     ArrayList<ComponentStatus> componentStatuses = new ArrayList<>();
     hb.setComponentStatus(componentStatuses);
 
@@ -269,7 +275,7 @@ public class TestHeartbeatHandler {
     hb.setResponseId(1);
     hb.setHostname(DummyHostname1);
     hb.setNodeStatus(new HostStatus(Status.HEALTHY, DummyHostStatus));
-    hb.setReports(new ArrayList<CommandReport>());
+    hb.setReports(new ArrayList<>());
     hb.setComponentStatus(componentStatuses);
 
     resp = handler.handleHeartBeat(hb);
@@ -305,7 +311,7 @@ public class TestHeartbeatHandler {
     hb.setResponseId(0);
     hb.setHostname(DummyHostname1);
     hb.setNodeStatus(new HostStatus(Status.HEALTHY, DummyHostStatus));
-    hb.setReports(new ArrayList<CommandReport>());
+    hb.setReports(new ArrayList<>());
     ArrayList<ComponentStatus> componentStatuses = new ArrayList<>();
 
     ComponentStatus componentStatus1 = new ComponentStatus();
@@ -745,7 +751,7 @@ public class TestHeartbeatHandler {
     hs.setCause("");
     hs.setStatus(status);
     heartBeat.setNodeStatus(hs);
-    heartBeat.setReports(Collections.<CommandReport>emptyList());
+    heartBeat.setReports(Collections.emptyList());
 
     return heartBeat;
   }
@@ -822,7 +828,7 @@ public class TestHeartbeatHandler {
     cr.setExitCode(777);
     reports.add(cr);
     hb.setReports(reports);
-    hb.setComponentStatus(new ArrayList<ComponentStatus>());
+    hb.setComponentStatus(new ArrayList<>());
 
     final HostRoleCommand command = hostRoleCommandFactory.create(DummyHostname1,
             Role.DATANODE, null, RoleCommand.INSTALL);
@@ -891,7 +897,7 @@ public class TestHeartbeatHandler {
     cr.setExitCode(777);
     reports.add(cr);
     hb.setReports(reports);
-    hb.setComponentStatus(new ArrayList<ComponentStatus>());
+    hb.setComponentStatus(new ArrayList<>());
 
     final HostRoleCommand command = hostRoleCommandFactory.create(DummyHostname1,
             Role.DATANODE, null, null);
@@ -938,17 +944,17 @@ public class TestHeartbeatHandler {
     hb.setResponseId(0);
     hb.setHostname(DummyHostname1);
     hb.setNodeStatus(new HostStatus(Status.HEALTHY, DummyHostStatus));
-    hb.setReports(new ArrayList<CommandReport>());
+    hb.setReports(new ArrayList<>());
     hb.setAgentEnv(new AgentEnv());
-    hb.setMounts(new ArrayList<DiskInfo>());
+    hb.setMounts(new ArrayList<>());
 
     ArrayList<ComponentStatus> componentStatuses = new ArrayList<>();
     ComponentStatus componentStatus1 = createComponentStatus(DummyCluster, HDFS, DummyHostStatus, State.STARTED,
-        SecurityState.UNSECURED, DATANODE, "{\"stackName\":\"HDP\",\"stackVersion\":\"1.3.0\"}");
+      DATANODE, "{\"stackName\":\"HDP\",\"stackVersion\":\"1.3.0\"}");
     ComponentStatus componentStatus2 =
-        createComponentStatus(DummyCluster, HDFS, DummyHostStatus, State.STARTED, SecurityState.UNSECURED, NAMENODE, "");
+        createComponentStatus(DummyCluster, HDFS, DummyHostStatus, State.STARTED, NAMENODE, "");
     ComponentStatus componentStatus3 = createComponentStatus(DummyCluster, HDFS, DummyHostStatus, State.INSTALLED,
-        SecurityState.UNSECURED, HDFS_CLIENT, "{\"stackName\":\"HDP\",\"stackVersion\":\"1.3.0\"}");
+      HDFS_CLIENT, "{\"stackName\":\"HDP\",\"stackVersion\":\"1.3.0\"}");
 
     componentStatuses.add(componentStatus1);
     componentStatuses.add(componentStatus2);
@@ -957,7 +963,7 @@ public class TestHeartbeatHandler {
 
     ActionQueue aq = new ActionQueue();
     ActionManager am = actionManagerTestHelper.getMockActionManager();
-    expect(am.getTasks(EasyMock.<List<Long>>anyObject())).andReturn(new ArrayList<HostRoleCommand>());
+    expect(am.getTasks(EasyMock.<List<Long>>anyObject())).andReturn(new ArrayList<>());
     replay(am);
 
     HeartBeatHandler handler = heartbeatTestHelper.getHeartBeatHandler(am, aq);
@@ -1362,7 +1368,7 @@ public class TestHeartbeatHandler {
 
 
   private ComponentStatus createComponentStatus(String clusterName, String serviceName, String message,
-                                                State state, SecurityState securityState,
+                                                State state,
                                                 String componentName, String stackVersion) {
     ComponentStatus componentStatus1 = new ComponentStatus();
     componentStatus1.setClusterName(clusterName);
@@ -1387,7 +1393,7 @@ public class TestHeartbeatHandler {
     hb.setResponseId(0);
     hb.setHostname(DummyHostname1);
     hb.setNodeStatus(new HostStatus(Status.HEALTHY, DummyHostStatus));
-    hb.setReports(new ArrayList<CommandReport>());
+    hb.setReports(new ArrayList<>());
 
     ArrayList<ComponentStatus> componentStatuses = new ArrayList<>();
     ComponentStatus componentStatus1 = new ComponentStatus();
@@ -1428,8 +1434,6 @@ public class TestHeartbeatHandler {
     properties = kcp.get(0);
     Assert.assertNotNull(properties);
     Assert.assertEquals("c6403.ambari.apache.org", properties.get(KerberosIdentityDataFileWriter.HOSTNAME));
-    Assert.assertEquals("HDFS", properties.get(KerberosIdentityDataFileWriter.SERVICE));
-    Assert.assertEquals("DATANODE", properties.get(KerberosIdentityDataFileWriter.COMPONENT));
     Assert.assertEquals("dn/_HOST@_REALM", properties.get(KerberosIdentityDataFileWriter.PRINCIPAL));
     Assert.assertEquals("/etc/security/keytabs/dn.service.keytab", properties.get(KerberosIdentityDataFileWriter.KEYTAB_FILE_PATH));
     Assert.assertEquals("hdfs", properties.get(KerberosIdentityDataFileWriter.KEYTAB_FILE_OWNER_NAME));
@@ -1448,8 +1452,6 @@ public class TestHeartbeatHandler {
     properties = kcp.get(0);
     Assert.assertNotNull(properties);
     Assert.assertEquals("c6403.ambari.apache.org", properties.get(KerberosIdentityDataFileWriter.HOSTNAME));
-    Assert.assertEquals("HDFS", properties.get(KerberosIdentityDataFileWriter.SERVICE));
-    Assert.assertEquals("DATANODE", properties.get(KerberosIdentityDataFileWriter.COMPONENT));
     Assert.assertEquals("dn/_HOST@_REALM", properties.get(KerberosIdentityDataFileWriter.PRINCIPAL));
     Assert.assertEquals("/etc/security/keytabs/dn.service.keytab", properties.get(KerberosIdentityDataFileWriter.KEYTAB_FILE_PATH));
     Assert.assertFalse(properties.containsKey(KerberosIdentityDataFileWriter.KEYTAB_FILE_OWNER_NAME));
@@ -1476,12 +1478,11 @@ public class TestHeartbeatHandler {
     ExecutionCommand executionCommand = new ExecutionCommand();
 
     Map<String, String> hlp = new HashMap<>();
-    hlp.put("custom_command", "SET_KEYTAB");
+    hlp.put("custom_command", SET_KEYTAB);
     executionCommand.setHostLevelParams(hlp);
 
     Map<String, String> commandparams = new HashMap<>();
     commandparams.put(KerberosServerAction.AUTHENTICATED_USER_NAME, "admin");
-    commandparams.put(KerberosServerAction.DATA_DIRECTORY, createTestKeytabData().getAbsolutePath());
     executionCommand.setCommandParams(commandparams);
 
     ActionQueue aq = new ActionQueue();
@@ -1496,7 +1497,10 @@ public class TestHeartbeatHandler {
         }});
     replay(am);
 
-    heartbeatTestHelper.getHeartBeatHandler(am, aq).injectKeytab(executionCommand, "SET_KEYTAB", targetHost);
+
+    HeartBeatHandler handler = heartbeatTestHelper.getHeartBeatHandler(am, aq);
+    commandparams.put(KerberosServerAction.DATA_DIRECTORY, createTestKeytabData(handler).getAbsolutePath());
+    handler.injectKeytab(executionCommand, SET_KEYTAB, targetHost);
 
     return executionCommand.getKerberosCommandParams();
   }
@@ -1512,7 +1516,6 @@ public class TestHeartbeatHandler {
 
     Map<String, String> commandparams = new HashMap<>();
     commandparams.put(KerberosServerAction.AUTHENTICATED_USER_NAME, "admin");
-    commandparams.put(KerberosServerAction.DATA_DIRECTORY, createTestKeytabData().getAbsolutePath());
     executionCommand.setCommandParams(commandparams);
 
     ActionQueue aq = new ActionQueue();
@@ -1527,37 +1530,59 @@ public class TestHeartbeatHandler {
         }});
     replay(am);
 
-    heartbeatTestHelper.getHeartBeatHandler(am, aq).injectKeytab(executionCommand, "REMOVE_KEYTAB", targetHost);
+    HeartBeatHandler handler = heartbeatTestHelper.getHeartBeatHandler(am, aq);
+    commandparams.put(KerberosServerAction.DATA_DIRECTORY, createTestKeytabData(handler).getAbsolutePath());
+    handler.injectKeytab(executionCommand, REMOVE_KEYTAB, targetHost);
 
     return executionCommand.getKerberosCommandParams();
   }
 
 
-  private File createTestKeytabData() throws Exception {
-    File dataDirectory = temporaryFolder.newFolder();
-    File identityDataFile = new File(dataDirectory, KerberosIdentityDataFileWriter.DATA_FILE_NAME);
-    KerberosIdentityDataFileWriter kerberosIdentityDataFileWriter = injector.getInstance(KerberosIdentityDataFileWriterFactory.class).createKerberosIdentityDataFileWriter(identityDataFile);
-    File hostDirectory = new File(dataDirectory, "c6403.ambari.apache.org");
+  private File createTestKeytabData(HeartBeatHandler heartbeatHandler) throws Exception {
+    KerberosKeytabController kerberosKeytabControllerMock = createMock(KerberosKeytabController.class);
+    expect(kerberosKeytabControllerMock.getFilteredKeytabs(null,null,null)).andReturn(
+      Sets.newHashSet(
+        new ResolvedKerberosKeytab(
+          "/etc/security/keytabs/dn.service.keytab",
+          "hdfs",
+          "r",
+          "hadoop",
+          "",
+          Sets.newHashSet(new ResolvedKerberosPrincipal(
+              1L,
+              "c6403.ambari.apache.org",
+              "dn/_HOST@_REALM",
+              false,
+              "/tmp",
+              "HDFS",
+              "DATANODE",
+              "/etc/security/keytabs/dn.service.keytab"
+            )
+          ),
+          false,
+          false
+        )
+      )
+    ).once();
 
+    replay(kerberosKeytabControllerMock);
+
+    Field controllerField = heartbeatHandler.getClass().getDeclaredField("kerberosKeytabController");
+    controllerField.setAccessible(true);
+    controllerField.set(heartbeatHandler, kerberosKeytabControllerMock);
+
+    File dataDirectory = temporaryFolder.newFolder();
+    File hostDirectory = new File(dataDirectory, "c6403.ambari.apache.org");
     File keytabFile;
     if(hostDirectory.mkdirs()) {
-      keytabFile = new File(hostDirectory, DigestUtils.sha1Hex("/etc/security/keytabs/dn.service.keytab"));
+      keytabFile = new File(hostDirectory, DigestUtils.sha256Hex("/etc/security/keytabs/dn.service.keytab"));
+      FileWriter fw = new FileWriter(keytabFile);
+      BufferedWriter bw = new BufferedWriter(fw);
+      bw.write("hello");
+      bw.close();
     } else {
       throw new Exception("Failed to create " + hostDirectory.getAbsolutePath());
     }
-
-    kerberosIdentityDataFileWriter.writeRecord("c6403.ambari.apache.org", "HDFS", "DATANODE",
-        "dn/_HOST@_REALM", "service",
-        "/etc/security/keytabs/dn.service.keytab",
-        "hdfs", "r", "hadoop", "", "false");
-
-    kerberosIdentityDataFileWriter.close();
-
-    // Ensure the host directory exists...
-    FileWriter fw = new FileWriter(keytabFile);
-    BufferedWriter bw = new BufferedWriter(fw);
-    bw.write("hello");
-    bw.close();
 
     return dataDirectory;
   }

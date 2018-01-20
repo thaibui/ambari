@@ -40,7 +40,6 @@ import java.util.Map;
 import java.util.Set;
 
 import org.apache.ambari.server.AmbariException;
-import org.apache.ambari.server.api.services.AmbariMetaInfo;
 import org.apache.ambari.server.state.CommandScriptDefinition;
 import org.apache.ambari.server.state.ComponentInfo;
 import org.apache.ambari.server.state.CredentialStoreInfo;
@@ -500,6 +499,36 @@ public class ServiceModuleTest {
   }
 
   @Test
+  public void testResolve_ServerActionDirectory() throws Exception {
+    File serverActions = new File("server_actions");
+
+    // check directory specified in child only
+    ServiceInfo info = new ServiceInfo();
+    ServiceInfo parentInfo = new ServiceInfo();
+    ServiceModule child = createServiceModule(info);
+    ServiceModule parent = createServiceModule(parentInfo);
+    child.getModuleInfo().setServerActionsFolder(serverActions);
+    resolveService(child, parent);
+    assertEquals(serverActions.getPath(), child.getModuleInfo().getServerActionsFolder().getPath());
+
+    // check directory specified in parent only
+    child = createServiceModule(info);
+    parent = createServiceModule(parentInfo);
+    parent.getModuleInfo().setServerActionsFolder(serverActions);
+    resolveService(child, parent);
+    assertEquals(serverActions.getPath(), child.getModuleInfo().getServerActionsFolder().getPath());
+
+    // check directory set in both
+    info.setServerActionsFolder(serverActions);
+    child = createServiceModule(info);
+    child.getModuleInfo().setServerActionsFolder(serverActions);
+    parent = createServiceModule(parentInfo);
+    parent.getModuleInfo().setServerActionsFolder(new File("other"));
+    resolveService(child, parent);
+    assertEquals(serverActions.getPath(), child.getModuleInfo().getServerActionsFolder().getPath());
+  }
+
+  @Test
   public void testResolve_CustomCommands() throws Exception {
     List<CustomCommandDefinition> customCommands = new ArrayList<>();
     CustomCommandDefinition cmd1 = new CustomCommandDefinition();
@@ -752,14 +781,14 @@ public class ServiceModuleTest {
     Map<String, Map<String, Map<String, String>>> parentAttributes = parent.getModuleInfo().getConfigTypeAttributes();
 
     assertEquals(3, childAttributes.size());
-    assertAttributes(childAttributes.get("FOO"), Collections.<String, String>emptyMap());
+    assertAttributes(childAttributes.get("FOO"), Collections.emptyMap());
     assertAttributes(childAttributes.get("BAR"), attributes);
-    assertAttributes(childAttributes.get("OTHER"), Collections.<String, String>emptyMap());
+    assertAttributes(childAttributes.get("OTHER"), Collections.emptyMap());
 
     assertEquals(3, parentAttributes.size());
-    assertAttributes(parentAttributes.get("FOO"), Collections.<String, String>emptyMap());
-    assertAttributes(parentAttributes.get("BAR"), Collections.<String, String>emptyMap());
-    assertAttributes(parentAttributes.get("OTHER"), Collections.<String, String>emptyMap());
+    assertAttributes(parentAttributes.get("FOO"), Collections.emptyMap());
+    assertAttributes(parentAttributes.get("BAR"), Collections.emptyMap());
+    assertAttributes(parentAttributes.get("OTHER"), Collections.emptyMap());
   }
 
   @Test
@@ -858,7 +887,7 @@ public class ServiceModuleTest {
 
     assertEquals(2, parentTypeAttributes.size());
     assertAttributes(parentTypeAttributes.get("FOO"), parentFooAttributes);
-    assertAttributes(parentTypeAttributes.get("BAR"), Collections.<String, String>emptyMap());
+    assertAttributes(parentTypeAttributes.get("BAR"), Collections.emptyMap());
   }
 
   @Test
@@ -1048,7 +1077,7 @@ public class ServiceModuleTest {
     info.setCommandScript(createNiceMock(CommandScriptDefinition.class));
 
     StackContext context = createStackContext(info.getName(), true);
-    ServiceModule service = createServiceModule(info, Collections.<ConfigurationModule>emptySet(), context);
+    ServiceModule service = createServiceModule(info, Collections.emptySet(), context);
     service.finalizeModule();
 
     verify(context);
@@ -1062,7 +1091,7 @@ public class ServiceModuleTest {
     info.setDeleted(true);
 
     StackContext context = createStackContext(info.getName(), false);
-    ServiceModule service = createServiceModule(info, Collections.<ConfigurationModule>emptySet(), context);
+    ServiceModule service = createServiceModule(info, Collections.emptySet(), context);
     service.finalizeModule();
 
     verify(context);
@@ -1224,8 +1253,8 @@ public class ServiceModuleTest {
 
     StackContext context = createStackContext(serviceInfo.getName(), true);
     // no config props
-    ConfigurationInfo configInfo = createConfigurationInfo(Collections.<PropertyInfo>emptyList(),
-        Collections.<String, String>emptyMap());
+    ConfigurationInfo configInfo = createConfigurationInfo(Collections.emptyList(),
+        Collections.emptyMap());
 
     ConfigurationModule module = createConfigurationModule(configType, configInfo);
     ConfigurationDirectory configDirectory = createConfigurationDirectory(Collections.singletonList(module));
@@ -1268,7 +1297,7 @@ public class ServiceModuleTest {
 
     ServiceDirectory serviceDirectory = createNiceMock(ServiceDirectory.class);
 
-    expect(serviceDirectory.getConfigurationDirectory(dir, AmbariMetaInfo.SERVICE_PROPERTIES_FOLDER_NAME)).andReturn(configDir).anyTimes();
+    expect(serviceDirectory.getConfigurationDirectory(dir, StackDirectory.SERVICE_PROPERTIES_FOLDER_NAME)).andReturn(configDir).anyTimes();
     expect(serviceDirectory.getMetricsFile(anyObject(String.class))).andReturn(new File("testMetricsFile")).anyTimes();
     expect(serviceDirectory.getWidgetsDescriptorFile(anyObject(String.class))).andReturn(new File("testWidgetsFile")).anyTimes();
     expect(serviceDirectory.getAlertsFile()).andReturn(new File("testAlertsFile")).anyTimes();
@@ -1293,7 +1322,7 @@ public class ServiceModuleTest {
   }
 
   private ConfigurationModule createConfigurationModule(String configType, Collection<PropertyInfo> properties) {
-    ConfigurationInfo info = new ConfigurationInfo(properties, Collections.<String, String>emptyMap());
+    ConfigurationInfo info = new ConfigurationInfo(properties, Collections.emptyMap());
     return new ConfigurationModule(configType, info);
   }
 
@@ -1331,7 +1360,7 @@ public class ServiceModuleTest {
   }
 
   private void resolveService(ServiceModule service, ServiceModule parent) throws AmbariException {
-    service.resolve(parent, Collections.<String, StackModule>emptyMap(), Collections.<String, ServiceModule>emptyMap(), Collections.<String, ExtensionModule>emptyMap());
+    service.resolve(parent, Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
     // during runtime this would be called by the Stack module when it's resolve completed
     service.finalizeModule();
     parent.finalizeModule();

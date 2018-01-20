@@ -26,16 +26,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.google.common.annotations.VisibleForTesting;
 import org.apache.ambari.logfeeder.common.LogFeederConstants;
+import org.apache.ambari.logfeeder.conf.LogFeederProps;
 import org.apache.ambari.logfeeder.input.Input;
 import org.apache.ambari.logfeeder.input.InputMarker;
-import org.apache.ambari.logfeeder.loglevelfilter.FilterLogData;
+import org.apache.ambari.logfeeder.loglevelfilter.LogLevelFilterHandler;
 import org.apache.ambari.logfeeder.metrics.MetricData;
 import org.apache.ambari.logfeeder.util.LogFeederUtil;
 import org.apache.ambari.logfeeder.util.MurmurHash;
+import org.apache.ambari.logsearch.config.api.OutputConfigMonitor;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+
+import javax.inject.Inject;
 
 public class OutputManager {
   private static final Logger LOG = Logger.getLogger(OutputManager.class);
@@ -50,10 +55,26 @@ public class OutputManager {
   private static long docCounter = 0;
   private MetricData messageTruncateMetric = new MetricData(null, false);
 
+  @Inject
+  private LogLevelFilterHandler logLevelFilterHandler;
+
+  @Inject
+  private LogFeederProps logFeederProps;
+
   private OutputLineFilter outputLineFilter = new OutputLineFilter();
 
   public List<Output> getOutputs() {
     return outputs;
+  }
+
+  public List<? extends OutputConfigMonitor> getOutputsToMonitor() {
+    List<Output> outputsToMonitor = new ArrayList<>();
+    for (Output output : outputs) {
+      if (output.monitorConfigChanges()) {
+        outputsToMonitor.add(output);
+      }
+    }
+    return outputsToMonitor;
   }
 
   public void add(Output output) {
@@ -62,7 +83,7 @@ public class OutputManager {
 
   public void init() throws Exception {
     for (Output output : outputs) {
-      output.init();
+      output.init(logFeederProps);
     }
   }
 
@@ -135,7 +156,7 @@ public class OutputManager {
         jsonObj.put("message_md5", "" + MurmurHash.hash64A(logMessage.getBytes(), 31174077));
       }
     }
-    if (FilterLogData.INSTANCE.isAllowed(jsonObj, inputMarker)
+    if (logLevelFilterHandler.isAllowed(jsonObj, inputMarker)
       && !outputLineFilter.apply(jsonObj, inputMarker.input)) {
       for (Output output : input.getOutputList()) {
         try {
@@ -168,7 +189,7 @@ public class OutputManager {
   }
 
   public void write(String jsonBlock, InputMarker inputMarker) {
-    if (FilterLogData.INSTANCE.isAllowed(jsonBlock, inputMarker)) {
+    if (logLevelFilterHandler.isAllowed(jsonBlock, inputMarker)) {
       for (Output output : inputMarker.input.getOutputList()) {
         try {
           output.write(jsonBlock, inputMarker);
@@ -243,5 +264,23 @@ public class OutputManager {
         LOG.warn("Output not closed. Will ignore it." + output.getShortDescription() + ", pendingCound=" + output.getPendingCount());
       }
     }
+  }
+
+  public LogLevelFilterHandler getLogLevelFilterHandler() {
+    return logLevelFilterHandler;
+  }
+
+  @VisibleForTesting
+  public void setLogLevelFilterHandler(LogLevelFilterHandler logLevelFilterHandler) {
+    this.logLevelFilterHandler = logLevelFilterHandler;
+  }
+
+  public LogFeederProps getLogFeederProps() {
+    return logFeederProps;
+  }
+
+  @VisibleForTesting
+  public void setLogFeederProps(LogFeederProps logFeederProps) {
+    this.logFeederProps = logFeederProps;
   }
 }

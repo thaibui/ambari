@@ -188,9 +188,15 @@ class TestHDP26StackAdvisor(TestCase):
     self.stackAdvisor.recommendDruidConfigurations(configurations, clusterData, services, hosts)
     self.assertEquals(configurations,
                       {'druid-historical': {
-                        'properties': {'druid.processing.numThreads': '3', 'druid.server.http.numThreads': '40'}},
+                        'properties': {'druid.processing.numThreads': '3',
+                                       'druid.server.http.numThreads': '40',
+                                       'druid.processing.numMergeBuffers': '2',
+                                       'druid.processing.buffer.sizeBytes': '1073741824'}},
                         'druid-broker': {
-                          'properties': {'druid.processing.numThreads': '3', 'druid.server.http.numThreads': '40'}},
+                          'properties': {'druid.processing.numThreads': '3',
+                                         'druid.server.http.numThreads': '40',
+                                         'druid.processing.numMergeBuffers': '2',
+                                         'druid.processing.buffer.sizeBytes': '1073741824'}},
                         'druid-common': {'properties': {'druid.extensions.loadList': '["mysql-metadata-storage"]',
                                                         'druid.metadata.storage.connector.port': '3306',
                                                         'druid.metadata.storage.connector.connectURI': 'jdbc:mysql://c6401.ambari.apache.org:3306/druid?createDatabaseIfNotExist=true',
@@ -203,6 +209,477 @@ class TestHDP26StackAdvisor(TestCase):
                                                               'druid.historical.jvm.heap.memory': {'maximum': '49152'},
                                                               'druid.broker.jvm.heap.memory': {'maximum': '49152'}}}}
                       )
+
+  def test_recommendSPARK2Configurations_SecurityEnabledZeppelinInstalled(self):
+    configurations = {
+      "cluster-env": {
+        "properties": {
+          "security_enabled": "true",
+        }
+      },
+      "livy2-conf": {
+        "properties": {
+          "livy.property1": "value1"
+        }
+      },
+      "zeppelin-env": {
+        "properties": {
+          "zeppelin.server.kerberos.principal": "zeppelin_user@REALM"
+        }
+      }
+    }
+    services = {"configurations": configurations}
+    services['services'] = [
+      {
+        "StackServices": {
+          "service_name": "SPARK2"
+        },
+      }
+    ]
+    clusterData = {
+      "cpu": 4,
+      "containers": 5,
+      "ramPerContainer": 256,
+      "yarnMinContainerSize": 256
+    }
+    expected = {
+      "cluster-env": {
+        "properties": {
+          "security_enabled": "true",
+        }
+      },
+      "livy2-conf": {
+        "properties": {
+          "livy.superusers": "zeppelin_user",
+          "livy.property1": "value1"
+        }
+      },
+      "spark2-defaults": {
+        "properties": {
+          "spark.yarn.queue": "default"
+        }
+      },
+      "spark2-thrift-sparkconf": {
+        "properties": {
+          "spark.yarn.queue": "default"
+        }
+      },
+      "zeppelin-env": {
+        "properties": {
+          "zeppelin.server.kerberos.principal": "zeppelin_user@REALM"
+        }
+      }
+    }
+
+    self.stackAdvisor.recommendSPARK2Configurations(configurations, clusterData, services, None)
+    self.assertEquals(configurations, expected)
+
+  def test_recommendSPARK2Configurations_SecurityNotEnabledZeppelinInstalled(self):
+    configurations = {
+      "cluster-env": {
+        "properties": {
+          "security_enabled": "false",
+        }
+      },
+      "livy2-conf": {
+        "properties": {
+          "livy.property1": "value1"
+        }
+      },
+      "zeppelin-env": {
+        "properties": {
+        }
+      }
+    }
+    services = {"configurations": configurations}
+    services['services'] = [
+      {
+        "StackServices": {
+          "service_name": "SPARK2"
+        },
+      }
+    ]
+    clusterData = {
+      "cpu": 4,
+      "containers": 5,
+      "ramPerContainer": 256,
+      "yarnMinContainerSize": 256
+    }
+    expected = {
+      "cluster-env": {
+        "properties": {
+          "security_enabled": "false",
+        }
+      },
+      "livy2-conf": {
+        "properties": {
+          "livy.property1": "value1"
+        }
+      },
+      "spark2-defaults": {
+        "properties": {
+          "spark.yarn.queue": "default"
+        }
+      },
+      "spark2-thrift-sparkconf": {
+        "properties": {
+          "spark.yarn.queue": "default"
+        }
+      },
+      "zeppelin-env": {
+        "properties": {
+        }
+      }
+    }
+
+    self.stackAdvisor.recommendSPARK2Configurations(configurations, clusterData, services, None)
+    self.assertEquals(configurations, expected)
+
+  def test_recommendSPARK2Configurations_SecurityEnabledZeppelinInstalledExistingValue(self):
+    configurations = {
+      "cluster-env": {
+        "properties": {
+          "security_enabled": "true",
+        }
+      },
+      "livy2-conf": {
+        "properties": {
+          "livy.property1": "value1",
+          "livy.superusers": "livy_user"
+        }
+      },
+      "zeppelin-env": {
+        "properties": {
+          "zeppelin.server.kerberos.principal": "zeppelin_user@REALM"
+        }
+      }
+    }
+    services = {"configurations": configurations}
+    services['services'] = [
+      {
+        "StackServices": {
+          "service_name": "SPARK2"
+        },
+      }
+    ]
+    clusterData = {
+      "cpu": 4,
+      "containers": 5,
+      "ramPerContainer": 256,
+      "yarnMinContainerSize": 256
+    }
+    expected = {
+      "cluster-env": {
+        "properties": {
+          "security_enabled": "true",
+        }
+      },
+      "livy2-conf": {
+        "properties": {
+          "livy.property1": "value1",
+          "livy.superusers": "livy_user,zeppelin_user"
+        }
+      },
+      "spark2-defaults": {
+        "properties": {
+          "spark.yarn.queue": "default"
+        }
+      },
+      "spark2-thrift-sparkconf": {
+        "properties": {
+          "spark.yarn.queue": "default"
+        }
+      },
+      "zeppelin-env": {
+        "properties": {
+          "zeppelin.server.kerberos.principal": "zeppelin_user@REALM"
+        }
+      }
+    }
+
+    self.stackAdvisor.recommendSPARK2Configurations(configurations, clusterData, services, None)
+    self.assertEquals(configurations, expected)
+
+  def test_recommendSPARK2Configurations_SecurityEnabledZeppelinNotInstalled(self):
+    configurations = {
+      "cluster-env": {
+        "properties": {
+          "security_enabled": "true",
+        }
+      },
+      "livy2-conf": {
+        "properties": {
+          "livy.property1": "value1"
+        }
+      }
+    }
+    services = {"configurations": configurations}
+    services['services'] = [
+      {
+        "StackServices": {
+          "service_name": "SPARK2"
+        },
+      }
+    ]
+    clusterData = {
+      "cpu": 4,
+      "containers": 5,
+      "ramPerContainer": 256,
+      "yarnMinContainerSize": 256
+    }
+    expected = {
+      "cluster-env": {
+        "properties": {
+          "security_enabled": "true"
+        }
+      },
+      "livy2-conf": {
+        "properties": {
+          "livy.property1": "value1"
+        }
+      },
+      "spark2-defaults": {
+        "properties": {
+          "spark.yarn.queue": "default"
+        }
+      },
+      "spark2-thrift-sparkconf": {
+        "properties": {
+          "spark.yarn.queue": "default"
+        }
+      }
+    }
+
+    self.stackAdvisor.recommendSPARK2Configurations(configurations, clusterData, services, None)
+    self.assertEquals(configurations, expected)
+
+  def test_recommendZEPPELINConfigurations_SecurityEnabledSPARKInstalled(self):
+    configurations = {
+      "cluster-env": {
+        "properties": {
+          "security_enabled": "true",
+        }
+      },
+      "livy-conf": {
+        "properties": {
+          "livy.property1": "value1"
+        }
+      },
+      "livy2-conf": {
+        "properties": {
+          "livy.property1": "value1"
+        }
+      },
+      "zeppelin-env": {
+        "properties": {
+          "zeppelin.server.kerberos.principal": "zeppelin_user@REALM"
+        }
+      }
+    }
+    services = {"configurations": configurations}
+    services['services'] = [
+      {
+        "StackServices": {
+          "service_name": "ZEPPELIN"
+        },
+      }
+    ]
+    clusterData = {
+      "cpu": 4,
+      "containers": 5,
+      "ramPerContainer": 256,
+      "yarnMinContainerSize": 256
+    }
+    expected = {
+      "cluster-env": {
+        "properties": {
+          "security_enabled": "true",
+        }
+      },
+      "livy-conf": {
+        "properties": {
+          "livy.superusers": "zeppelin_user",
+          "livy.property1": "value1"
+        }
+      },
+      "livy2-conf": {
+        "properties": {
+          "livy.superusers": "zeppelin_user",
+          "livy.property1": "value1"
+        }
+      },
+      "zeppelin-env": {
+        "properties": {
+          "zeppelin.server.kerberos.principal": "zeppelin_user@REALM"
+        }
+      }
+    }
+
+    self.stackAdvisor.recommendZEPPELINConfigurations(configurations, clusterData, services, None)
+    self.assertEquals(configurations, expected)
+
+  def test_recommendZEPPELINConfigurations_SecurityNotEnabledSparkInstalled(self):
+    configurations = {
+      "cluster-env": {
+        "properties": {
+          "security_enabled": "false",
+        }
+      },
+      "livy-conf": {
+        "properties": {
+        }
+      },
+      "livy2-conf": {
+        "properties": {
+        }
+      },
+      "zeppelin-env": {
+        "properties": {
+        }
+      }
+    }
+    services = {"configurations": configurations}
+    services['services'] = [
+      {
+        "StackServices": {
+          "service_name": "ZEPPELIN"
+        },
+      }
+    ]
+    clusterData = {
+      "cpu": 4,
+      "containers": 5,
+      "ramPerContainer": 256,
+      "yarnMinContainerSize": 256
+    }
+    expected = {
+      "cluster-env": {
+        "properties": {
+          "security_enabled": "false",
+        }
+      },
+      "livy-conf": {
+        "properties": {
+        }
+      },
+      "livy2-conf": {
+        "properties": {
+        }
+      },
+      "zeppelin-env": {
+        "properties": {
+        }
+      }
+    }
+
+    self.stackAdvisor.recommendZEPPELINConfigurations(configurations, clusterData, services, None)
+    self.assertEquals(configurations, expected)
+
+  def test_recommendZEPPELINConfigurations_SecurityEnabledZeppelinInstalledExistingValue(self):
+    configurations = {
+      "cluster-env": {
+        "properties": {
+          "security_enabled": "true",
+        }
+      },
+      "livy-conf": {
+        "properties": {
+          "livy.superusers": "livy_user, hdfs"
+        }
+      },
+      "livy2-conf": {
+        "properties": {
+          "livy.superusers": "livy2_user"
+        }
+      },
+      "zeppelin-env": {
+        "properties": {
+          "zeppelin.server.kerberos.principal": "zeppelin_user@REALM"
+        }
+      }
+    }
+    services = {"configurations": configurations}
+    services['services'] = [
+      {
+        "StackServices": {
+          "service_name": "ZEPPELIN"
+        },
+      }
+    ]
+    clusterData = {
+      "cpu": 4,
+      "containers": 5,
+      "ramPerContainer": 256,
+      "yarnMinContainerSize": 256
+    }
+    expected = {
+      "cluster-env": {
+        "properties": {
+          "security_enabled": "true",
+        }
+      },
+      "livy-conf": {
+        "properties": {
+          "livy.superusers": "livy_user,hdfs,zeppelin_user"
+        }
+      },
+      "livy2-conf": {
+        "properties": {
+          "livy.superusers": "livy2_user,zeppelin_user"
+        }
+      },
+      "zeppelin-env": {
+        "properties": {
+          "zeppelin.server.kerberos.principal": "zeppelin_user@REALM"
+        }
+      }
+    }
+
+    self.stackAdvisor.recommendZEPPELINConfigurations(configurations, clusterData, services, None)
+    self.assertEquals(configurations, expected)
+
+  def test_recommendZEPPELINConfigurations_SecurityEnabledSparkNotInstalled(self):
+    configurations = {
+      "cluster-env": {
+        "properties": {
+          "security_enabled": "true",
+        },
+        "zeppelin-env": {
+          "properties": {
+            "zeppelin.server.kerberos.principal": "zeppelin_user@REALM"
+          }
+        }
+      }
+    }
+    services = {"configurations": configurations}
+    services['services'] = [
+      {
+        "StackServices": {
+          "service_name": "ZEPPELIN"
+        },
+      }
+    ]
+    clusterData = {
+      "cpu": 4,
+      "containers": 5,
+      "ramPerContainer": 256,
+      "yarnMinContainerSize": 256
+    }
+    expected = {
+      "cluster-env": {
+        "properties": {
+          "security_enabled": "true",
+        },
+        "zeppelin-env": {
+          "properties": {
+            "zeppelin.server.kerberos.principal": "zeppelin_user@REALM"
+          }
+        }
+      }
+    }
+
+    self.stackAdvisor.recommendZEPPELINConfigurations(configurations, clusterData, services, None)
+    self.assertEquals(configurations, expected)
 
   def test_recommendDruidConfigurations_WithPostgresql(self):
     hosts = {
@@ -296,9 +773,15 @@ class TestHDP26StackAdvisor(TestCase):
     self.stackAdvisor.recommendDruidConfigurations(configurations, clusterData, services, hosts)
     self.assertEquals(configurations,
                       {'druid-historical': {
-                        'properties': {'druid.processing.numThreads': '3', 'druid.server.http.numThreads': '40'}},
+                        'properties': {'druid.processing.numThreads': '3',
+                                       'druid.server.http.numThreads': '40',
+                                       'druid.processing.numMergeBuffers': '2',
+                                       'druid.processing.buffer.sizeBytes': '1073741824'}},
                         'druid-broker': {
-                          'properties': {'druid.processing.numThreads': '3', 'druid.server.http.numThreads': '40'}},
+                          'properties': {'druid.processing.numThreads': '3',
+                                         'druid.server.http.numThreads': '40',
+                                         'druid.processing.numMergeBuffers': '2',
+                                         'druid.processing.buffer.sizeBytes': '1073741824'}},
                         'druid-common': {'properties': {'druid.extensions.loadList': '["postgresql-metadata-storage"]',
                                                         'druid.metadata.storage.connector.port': '5432',
                                                         'druid.metadata.storage.connector.connectURI': 'jdbc:postgresql://c6401.ambari.apache.org:5432/druid',
@@ -404,9 +887,15 @@ class TestHDP26StackAdvisor(TestCase):
     self.stackAdvisor.recommendDruidConfigurations(configurations, clusterData, services, hosts)
     self.assertEquals(configurations,
                       {'druid-historical': {
-                        'properties': {'druid.processing.numThreads': '3', 'druid.server.http.numThreads': '40'}},
+                        'properties': {'druid.processing.numThreads': '3',
+                                       'druid.server.http.numThreads': '40',
+                                       'druid.processing.numMergeBuffers': '2',
+                                       'druid.processing.buffer.sizeBytes': '1073741824'}},
                         'druid-broker': {
-                          'properties': {'druid.processing.numThreads': '3', 'druid.server.http.numThreads': '40'}},
+                          'properties': {'druid.processing.numThreads': '3',
+                                         'druid.server.http.numThreads': '40',
+                                         'druid.processing.numMergeBuffers': '2',
+                                         'druid.processing.buffer.sizeBytes': '1073741824'}},
                         'druid-common': {'properties': {'druid.extensions.loadList': '[]',
                                                         'druid.metadata.storage.connector.port': '1527',
                                                         'druid.metadata.storage.connector.connectURI': 'jdbc:derby://c6401.ambari.apache.org:1527/druid;create=true',
@@ -419,6 +908,7 @@ class TestHDP26StackAdvisor(TestCase):
                                                               'druid.historical.jvm.heap.memory': {'maximum': '49152'},
                                                               'druid.broker.jvm.heap.memory': {'maximum': '49152'}}}}
                       )
+
 
 
   def test_recommendDruidConfigurations_property_existence_check(self):
@@ -495,7 +985,7 @@ class TestHDP26StackAdvisor(TestCase):
           "href": "/api/v1/hosts/c6402.ambari.apache.org",
           "Hosts": {
             "cpu_count": 1,
-            "total_mem": 1922680,
+            "total_mem": 622680,
             "disk_info": [
               {"mountpoint": "/"},
               {"mountpoint": "/dev/shm"},
@@ -598,9 +1088,15 @@ class TestHDP26StackAdvisor(TestCase):
     self.stackAdvisor.recommendDruidConfigurations(configurations, clusterData, services, hosts)
     self.assertEquals(configurations,
                       {'druid-historical': {
-                        'properties': {'druid.processing.numThreads': '2', 'druid.server.http.numThreads': '40'}},
+                        'properties': {'druid.processing.numThreads': '2',
+                                       'druid.server.http.numThreads': '40',
+                                       'druid.processing.numMergeBuffers': '2',
+                                       'druid.processing.buffer.sizeBytes': '134217728'}},
                         'druid-broker': {
-                          'properties': {'druid.processing.numThreads': '1', 'druid.server.http.numThreads': '40'}},
+                          'properties': {'druid.processing.numThreads': '1',
+                                         'druid.server.http.numThreads': '40',
+                                         'druid.processing.numMergeBuffers': '2',
+                                         'druid.processing.buffer.sizeBytes': '67108864'}},
                         'druid-common': {'properties': {'druid.extensions.loadList': '[]',
                                                         'druid.metadata.storage.connector.port': '1527',
                                                         'druid.metadata.storage.connector.connectURI': 'jdbc:derby://c6401.ambari.apache.org:1527/druid;create=true',
@@ -612,8 +1108,157 @@ class TestHDP26StackAdvisor(TestCase):
                                                               'druid.middlemanager.jvm.heap.memory': {
                                                                 'maximum': '49152'},
                                                               'druid.historical.jvm.heap.memory': {'maximum': '3755'},
-                                                              'druid.broker.jvm.heap.memory': {'maximum': '1877'}}}}
+                                                              'druid.broker.jvm.heap.memory': {'maximum': '1024'}}}}
                       )
+
+  def test_recommendDruidConfigurations_low_mem_hosts(self):
+    hosts = {
+      "items": [
+        {
+          "href": "/api/v1/hosts/c6401.ambari.apache.org",
+          "Hosts": {
+            "cpu_count": 8,
+            "total_mem": 102400,
+            "disk_info": [
+              {"mountpoint": "/"},
+              {"mountpoint": "/dev/shm"},
+              {"mountpoint": "/vagrant"},
+              {"mountpoint": "/"},
+              {"mountpoint": "/dev/shm"},
+              {"mountpoint": "/vagrant"}
+            ],
+            "public_host_name": "c6401.ambari.apache.org",
+            "host_name": "c6401.ambari.apache.org"
+          }
+        }, {
+          "href": "/api/v1/hosts/c6402.ambari.apache.org",
+          "Hosts": {
+            "cpu_count": 4,
+            "total_mem": 204800,
+            "disk_info": [
+              {"mountpoint": "/"},
+              {"mountpoint": "/dev/shm"},
+              {"mountpoint": "/vagrant"},
+              {"mountpoint": "/"},
+              {"mountpoint": "/dev/shm"},
+              {"mountpoint": "/vagrant"}
+            ],
+            "public_host_name": "c6402.ambari.apache.org",
+            "host_name": "c6402.ambari.apache.org"
+          }
+        },
+        {
+          "href": "/api/v1/hosts/c6403.ambari.apache.org",
+          "Hosts": {
+            "cpu_count": 6,
+            "total_mem": 409600,
+            "disk_info": [
+              {"mountpoint": "/"},
+              {"mountpoint": "/dev/shm"},
+              {"mountpoint": "/vagrant"},
+              {"mountpoint": "/"},
+              {"mountpoint": "/dev/shm"},
+              {"mountpoint": "/vagrant"}
+            ],
+            "public_host_name": "c6403.ambari.apache.org",
+            "host_name": "c6403.ambari.apache.org"
+          }
+        }
+      ]
+    }
+
+    services = {
+      "Versions": {
+        "parent_stack_version": "2.5",
+        "stack_name": "HDP",
+        "stack_version": "2.6",
+        "stack_hierarchy": {
+          "stack_name": "HDP",
+          "stack_versions": ["2.5", "2.4", "2.3", "2.2", "2.1", "2.0.6"]
+        }
+      },
+      "services": [{
+        "StackServices": {
+          "service_name": "DRUID",
+        },
+        "components": [
+          {
+            "StackServiceComponents": {
+              "component_name": "DRUID_COORDINATOR",
+              "hostnames": ["c6401.ambari.apache.org"]
+            },
+          },
+          {
+            "StackServiceComponents": {
+              "component_name": "DRUID_OVERLORD",
+              "hostnames": ["c6401.ambari.apache.org"]
+            },
+          },
+          {
+            "StackServiceComponents": {
+              "component_name": "DRUID_BROKER",
+              "hostnames": ["c6402.ambari.apache.org", "c6403.ambari.apache.org"]
+            },
+          },
+          {
+            "StackServiceComponents": {
+              "component_name": "DRUID_HISTORICAL",
+              "hostnames": ["c6401.ambari.apache.org", "c6403.ambari.apache.org"]
+            },
+          },
+          {
+            "StackServiceComponents": {
+              "component_name": "DRUID_MIDDLEMANAGER",
+              "hostnames": ["c6401.ambari.apache.org"]
+            },
+          }
+        ]
+      }
+      ],
+      "configurations": {
+        "druid-common": {
+          "properties": {
+            "database_name": "druid",
+            "metastore_hostname": "c6401.ambari.apache.org",
+            "druid.metadata.storage.type": "derby",
+            "druid.extensions.loadList": "[\"mysql-metadata-storage\"]",
+            "druid.extensions.pullList": "[]"
+          }
+        }
+      }
+    }
+
+    clusterData = {
+    }
+
+    configurations = {
+    }
+
+    self.stackAdvisor.recommendDruidConfigurations(configurations, clusterData, services, hosts)
+    self.assertEquals(configurations,
+                    {'druid-historical': {
+                      'properties': {'druid.processing.numThreads': '5',
+                                     'druid.server.http.numThreads': '40',
+                                     'druid.processing.numMergeBuffers': '2',
+                                     'druid.processing.buffer.sizeBytes': '14680064'}},
+                      'druid-broker': {
+                        'properties': {'druid.processing.numThreads': '3',
+                                       'druid.server.http.numThreads': '40',
+                                       'druid.processing.numMergeBuffers': '2',
+                                       'druid.processing.buffer.sizeBytes': '41943040'}},
+                      'druid-common': {'properties': {'druid.extensions.loadList': '[]',
+                                                      'druid.metadata.storage.connector.port': '1527',
+                                                      'druid.metadata.storage.connector.connectURI': 'jdbc:derby://c6401.ambari.apache.org:1527/druid;create=true',
+                                                      'druid.zk.service.host': ''
+                                                      }},
+                      'druid-env': {'properties': {},
+                                    'property_attributes': {'druid.coordinator.jvm.heap.memory': {'maximum': '1024'},
+                                                            'druid.overlord.jvm.heap.memory': {'maximum': '1024'},
+                                                            'druid.middlemanager.jvm.heap.memory': {
+                                                              'maximum': '1024'},
+                                                            'druid.historical.jvm.heap.memory': {'maximum': '1024'},
+                                                            'druid.broker.jvm.heap.memory': {'maximum': '1024'}}}}
+                    )
 
 
   def test_recommendAtlasConfigurations(self):
@@ -658,7 +1303,8 @@ class TestHDP26StackAdvisor(TestCase):
           "atlas.graph.storage.hostname": "",
           "atlas.kafka.bootstrap.servers": "",
           "atlas.kafka.zookeeper.connect": "",
-          "atlas.authorizer.impl": "simple"
+          "atlas.authorizer.impl": "simple",
+          'atlas.proxyusers': 'knox'
         }
       },
       "infra-solr-env": {
@@ -990,6 +1636,22 @@ class TestHDP26StackAdvisor(TestCase):
       },
       "hive-atlas-application.properties" : {
         "properties": {}
+      },
+      "druid-coordinator": {
+        "properties": {'druid.port': 8081}
+      },
+      "druid-broker": {
+        "properties": {'druid.port': 8082}
+      },
+      "druid-common": {
+        "properties": {
+          "database_name": "druid",
+          "metastore_hostname": "c6401.ambari.apache.org",
+          "druid.metadata.storage.type": "mysql",
+          'druid.metadata.storage.connector.port': '3306',
+          'druid.metadata.storage.connector.user': 'druid',
+          'druid.metadata.storage.connector.connectURI': 'jdbc:mysql://c6401.ambari.apache.org:3306/druid?createDatabaseIfNotExist=true'
+        }
       }
     }
 
@@ -1053,6 +1715,37 @@ class TestHDP26StackAdvisor(TestCase):
               "service_version": "0.7.0"
             },
             "components": []
+          },
+          {
+            "StackServices": {
+              "service_name": "DRUID",
+            },
+            "components": [
+              {
+                "StackServiceComponents": {
+                  "component_name": "DRUID_COORDINATOR",
+                  "hostnames": ["c6401.ambari.apache.org"]
+                },
+              },
+              {
+                "StackServiceComponents": {
+                  "component_name": "DRUID_OVERLORD",
+                  "hostnames": ["c6401.ambari.apache.org"]
+                },
+              },
+              {
+                "StackServiceComponents": {
+                  "component_name": "DRUID_BROKER",
+                  "hostnames": ["c6401.ambari.apache.org"]
+                },
+              },
+              {
+                "StackServiceComponents": {
+                  "component_name": "DRUID_ROUTER",
+                  "hostnames": ["c6401.ambari.apache.org"]
+                },
+              }
+            ]
           }
         ],
       "Versions": {
@@ -1188,7 +1881,13 @@ class TestHDP26StackAdvisor(TestCase):
         }
       },
       'hive-interactive-site': {
-        'properties': {}
+        'properties': {
+          'hive.druid.broker.address.default': 'c6401.ambari.apache.org:8082',
+          'hive.druid.coordinator.address.default': 'c6401.ambari.apache.org:8081',
+          'hive.druid.metadata.db.type': 'mysql',
+          'hive.druid.metadata.uri': 'jdbc:mysql://c6401.ambari.apache.org:3306/druid?createDatabaseIfNotExist=true',
+          'hive.druid.metadata.username': 'druid'
+        }
       },
       'yarn-site': {
         'properties': {
@@ -1239,6 +1938,23 @@ class TestHDP26StackAdvisor(TestCase):
     expected['core-site'] = {
       'properties': {}
     }
+
+    # case there is router in the stack
+    services['configurations']['druid-router'] = {}
+    services['configurations']['druid-router']['properties'] = {}
+    services['configurations']['druid-router']['properties']['druid.port'] = 8083
+    expected['hive-interactive-site']['properties']['hive.druid.broker.address.default'] = 'c6401.ambari.apache.org:8083'
+
+    recommendedConfigurations = {}
+    self.stackAdvisor.recommendHIVEConfigurations(recommendedConfigurations, clusterData, services, hosts)
+    self.assertEquals(recommendedConfigurations, expected)
+
+    # case there are not druid-common configs present
+    del services['configurations']['druid-common']
+    expected['hive-interactive-site']['properties']['hive.druid.broker.address.default'] = 'c6401.ambari.apache.org:8083'
+    expected['hive-interactive-site']['properties']['hive.druid.metadata.uri'] = ''
+    expected['hive-interactive-site']['properties']['hive.druid.metadata.username'] = ''
+    expected['hive-interactive-site']['properties']['hive.druid.metadata.db.type'] = ''
 
     recommendedConfigurations = {}
     self.stackAdvisor.recommendHIVEConfigurations(recommendedConfigurations, clusterData, services, hosts)

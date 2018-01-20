@@ -60,6 +60,14 @@ App.BreadcrumbItem = Em.Object.extend({
   labelBindingPath: '',
 
   /**
+   * View shown as breadcrumb.
+   * If provied, <code>itemView</code> supersedes <code>label</code> and <code>labelBindingPath</code>.
+   *
+   * @type {object}
+   */
+  itemView: null,
+
+  /**
    * Determines if breadcrumb is disabled
    *
    * @type {boolean}
@@ -74,7 +82,16 @@ App.BreadcrumbItem = Em.Object.extend({
   isLast: false,
 
   /**
+   * Invoke this action when click on breadcrumb item
+   * If provided, <code>action</code> supersedes <code>route</code>.
+   *
+   * @type {Function}
+   */
+  action: null,
+
+  /**
    * Move user to this route when click on breadcrumb item (don't add prefix <code>main</code>)
+   * This is used if an action is not defined.
    *
    * @type {string}
    */
@@ -116,7 +133,12 @@ App.BreadcrumbItem = Em.Object.extend({
   },
 
   transition: function () {
-    return App.router.route('main/' + this.get('route'));
+    const action = this.get('action');
+    if (action) {
+      return action();
+    } else {
+      return App.router.route('main/' + this.get('route'));
+    }
   },
 
   /**
@@ -168,6 +190,7 @@ App.BreadcrumbsView = Em.View.extend({
   items: function () {
     let currentState = App.get('router.currentState');
     let items = [];
+    const wizardStepRegex = /^step[0-9]?/;
     while (currentState) {
       if (currentState.breadcrumbs !== undefined) {
         // breadcrumbs should be defined and be not null or any other falsie-value
@@ -186,7 +209,8 @@ App.BreadcrumbsView = Em.View.extend({
       }
       else {
         // generate breadcrumb if it is not defined
-        if (currentState.name && !['root', 'index'].contains(currentState.name)) {
+        // breadcrumbs of wizard step such as "Step #" should be ignored
+        if (currentState.name && !['root', 'index'].contains(currentState.name) && !wizardStepRegex.test(currentState.name)) {
           items.pushObject({label: _formatLabel(currentState.name)});
         }
       }

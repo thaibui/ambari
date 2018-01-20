@@ -17,6 +17,7 @@
  */
 package org.apache.ambari.server.serveraction.upgrades;
 
+import org.apache.ambari.server.orm.dao.UpgradeDAO;
 import org.apache.ambari.server.orm.entities.UpgradeEntity;
 import org.apache.ambari.server.serveraction.AbstractServerAction;
 import org.apache.ambari.server.state.Cluster;
@@ -32,14 +33,24 @@ import com.google.inject.Inject;
  */
 public abstract class AbstractUpgradeServerAction extends AbstractServerAction {
 
+  public Clusters getClusters() {
+    return m_clusters;
+  }
+
   @Inject
-  protected Clusters m_clusters;
+  private Clusters m_clusters;
 
   /**
    * Used to move desired repo versions forward.
    */
   @Inject
   protected UpgradeHelper m_upgradeHelper;
+
+  /**
+   * Used to lookup or update {@link UpgradeEntity} instances.
+   */
+  @Inject
+  protected UpgradeDAO m_upgradeDAO;
 
   /**
    * Used to create instances of {@link UpgradeContext} with injected

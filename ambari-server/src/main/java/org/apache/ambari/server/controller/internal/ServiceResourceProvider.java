@@ -68,14 +68,18 @@ import org.apache.ambari.server.serveraction.kerberos.KerberosMissingAdminCreden
 import org.apache.ambari.server.state.Cluster;
 import org.apache.ambari.server.state.Clusters;
 import org.apache.ambari.server.state.MaintenanceState;
+import org.apache.ambari.server.state.RepositoryType;
 import org.apache.ambari.server.state.Service;
 import org.apache.ambari.server.state.ServiceComponent;
 import org.apache.ambari.server.state.ServiceComponentHost;
 import org.apache.ambari.server.state.ServiceInfo;
 import org.apache.ambari.server.state.StackId;
 import org.apache.ambari.server.state.State;
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.Validate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.inject.Inject;
 import com.google.inject.assistedinject.Assisted;
@@ -85,6 +89,9 @@ import com.google.inject.assistedinject.AssistedInject;
  * Resource provider for service resources.
  */
 public class ServiceResourceProvider extends AbstractControllerResourceProvider {
+
+  private static final Logger LOG = LoggerFactory.getLogger(ServiceResourceProvider.class);
+
   public static final String SERVICE_CLUSTER_NAME_PROPERTY_ID = PropertyHelper.getPropertyId(
       "ServiceInfo", "cluster_name");
 
@@ -416,6 +423,7 @@ public class ServiceResourceProvider extends AbstractControllerResourceProvider 
       LOG.warn("Received an empty requests set");
       return;
     }
+
     Clusters clusters = getManagementController().getClusters();
     // do all validation checks
     validateCreateRequests(requests, clusters);
@@ -427,6 +435,14 @@ public class ServiceResourceProvider extends AbstractControllerResourceProvider 
 
       if (null == repositoryVersion) {
         throw new AmbariException("Could not find any repository on the request.");
+      }
+
+      if (repositoryVersion.getType() != RepositoryType.STANDARD
+          && cluster.getProvisioningState() == State.INIT) {
+        throw new AmbariException(String.format(
+            "Unable to add %s to %s because the cluster is still being provisioned and the repository for the service is not %s: %s",
+            request.getServiceName(), cluster.getClusterName(), RepositoryType.STANDARD,
+            repositoryVersion));
       }
 
       Service s = cluster.addService(request.getServiceName(), repositoryVersion);
@@ -603,7 +619,7 @@ public class ServiceResourceProvider extends AbstractControllerResourceProvider 
       }
 
       if (!serviceNames.containsKey(request.getClusterName())) {
-        serviceNames.put(request.getClusterName(), new HashSet<String>());
+        serviceNames.put(request.getClusterName(), new HashSet<>());
       }
 
       if (serviceNames.get(request.getClusterName())
@@ -706,7 +722,7 @@ public class ServiceResourceProvider extends AbstractControllerResourceProvider 
 
         }
         if (!changedServices.containsKey(newState)) {
-          changedServices.put(newState, new ArrayList<Service>());
+          changedServices.put(newState, new ArrayList<>());
         }
         changedServices.get(newState).add(s);
       }
@@ -789,7 +805,7 @@ public class ServiceResourceProvider extends AbstractControllerResourceProvider 
               + ", newDesiredState=" + newState);
         }
         if (!changedComps.containsKey(newState)) {
-          changedComps.put(newState, new ArrayList<ServiceComponent>());
+          changedComps.put(newState, new ArrayList<>());
         }
         changedComps.get(newState).add(sc);
       }
@@ -857,12 +873,10 @@ public class ServiceResourceProvider extends AbstractControllerResourceProvider 
           }
         }
         if (!changedScHosts.containsKey(sc.getName())) {
-          changedScHosts.put(sc.getName(),
-              new EnumMap<State, List<ServiceComponentHost>>(State.class));
+          changedScHosts.put(sc.getName(), new EnumMap<>(State.class));
         }
         if (!changedScHosts.get(sc.getName()).containsKey(newState)) {
-          changedScHosts.get(sc.getName()).put(newState,
-              new ArrayList<ServiceComponentHost>());
+          changedScHosts.get(sc.getName()).put(newState, new ArrayList<>());
         }
         if (LOG.isDebugEnabled()) {
           LOG.debug("Handling update to ServiceComponentHost, clusterName={}, serviceName={}, componentName={}, hostname={}, currentState={}, newDesiredState={}",
@@ -1029,7 +1043,7 @@ public class ServiceResourceProvider extends AbstractControllerResourceProvider 
       }
 
       if (!serviceNames.containsKey(clusterName)) {
-        serviceNames.put(clusterName, new HashSet<String>());
+        serviceNames.put(clusterName, new HashSet<>());
       }
 
       if (serviceNames.get(clusterName).contains(serviceName)) {
@@ -1066,6 +1080,32 @@ public class ServiceResourceProvider extends AbstractControllerResourceProvider 
       }
 
       Long desiredRepositoryVersion = request.getDesiredRepositoryVersionId();
+
+      if (null == desiredRepositoryVersion) {
+        Set<Long> repoIds = new HashSet<>();
+
+        for (Service service : cluster.getServices().values()) {
+          RepositoryVersionEntity serviceRepo = service.getDesiredRepositoryVersion();
+          if (null != serviceRepo.getParentId()) {
+            repoIds.add(serviceRepo.getParentId());
+          } else {
+            repoIds.add(serviceRepo.getId());
+          }
+        }
+
+        LOG.info("{} was not specified; the following repository ids were found: {}",
+            SERVICE_DESIRED_REPO_VERSION_ID_PROPERTY_ID, StringUtils.join(repoIds, ','));
+
+        if (CollectionUtils.isEmpty(repoIds)) {
+          throw new IllegalArgumentException("No repositories were found for service installation");
+        } else if (repoIds.size() > 1) {
+          throw new IllegalArgumentException(String.format("%s was not specified, and the cluster " +
+              "contains more than one standard-type repository", SERVICE_DESIRED_REPO_VERSION_ID_PROPERTY_ID));
+        } else {
+          desiredRepositoryVersion = repoIds.iterator().next();
+        }
+      }
+
       if (null == desiredRepositoryVersion) {
         throw new IllegalArgumentException(String.format("%s is required when adding a service.", SERVICE_DESIRED_REPO_VERSION_ID_PROPERTY_ID));
       }

@@ -24,13 +24,16 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Set;
 
 import org.apache.ambari.server.AmbariException;
 import org.apache.ambari.server.state.quicklinks.Check;
+import org.apache.ambari.server.state.quicklinks.Host;
 import org.apache.ambari.server.state.quicklinks.Link;
 import org.apache.ambari.server.state.quicklinks.Port;
 import org.apache.ambari.server.state.quicklinks.Protocol;
@@ -89,6 +92,18 @@ public class QuickLinksConfigurationModuleTest {
     assertNotNull(links);
     assertEquals(7, links.size());
     assertEquals(4, parentQuickLinks.getQuickLinksConfiguration().getLinks().size());
+    Link threadStacks = getLink(links, "thread_stacks");
+    assertNotNull("https_regex property should have been inherited",
+        threadStacks.getPort().getHttpsRegex());
+  }
+
+  private Link getLink(Collection<Link> links, String name) {
+    for (Link link: links) {
+      if (name.equals(link.getName())) {
+        return link;
+      }
+    }
+    throw new NoSuchElementException("name");
   }
 
   @Test
@@ -113,6 +128,8 @@ public class QuickLinksConfigurationModuleTest {
         hasLink = true;
         Port port = link.getPort();
         assertEquals("mapred-site", port.getSite());
+        Host host = link.getHost();
+        assertEquals("core-site", host.getSite());
       }
     }
     assertTrue(hasLink);

@@ -351,9 +351,10 @@ public class BlueprintImpl implements Blueprint {
    * Validate blueprint configuration.
    *
    * @throws InvalidTopologyException if the blueprint configuration is invalid
+   * @throws GPLLicenseNotAcceptedException ambari was configured to use gpl software, but gpl license is not accepted
    */
   @Override
-  public void validateRequiredProperties() throws InvalidTopologyException {
+  public void validateRequiredProperties() throws InvalidTopologyException, GPLLicenseNotAcceptedException {
     validator.validateRequiredProperties();
   }
 
@@ -622,7 +623,7 @@ public class BlueprintImpl implements Blueprint {
    * @return set of repositories
    * */
   private void processRepoSettings(){
-    repoSettings = new ArrayList<RepositorySetting>();
+    repoSettings = new ArrayList<>();
     if (setting != null){
       Set<HashMap<String, String>> settingValue = setting.getSettingValue(Setting.SETTING_NAME_REPOSITORY_SETTINGS);
       for (Map<String, String> setting : settingValue) {

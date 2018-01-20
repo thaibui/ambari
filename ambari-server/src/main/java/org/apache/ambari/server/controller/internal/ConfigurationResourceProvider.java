@@ -103,7 +103,7 @@ public class ConfigurationResourceProvider extends
    * @param managementController  the associated management controller
    */
   ConfigurationResourceProvider(AmbariManagementController managementController) {
-    super(PROPERTY_IDS, KEY_PROPERTY_IDS, managementController);
+    super(Resource.Type.Configuration, PROPERTY_IDS, KEY_PROPERTY_IDS, managementController);
 
     // creating configs requires authorizations based on the type of changes being performed, therefore
     // checks need to be performed inline.
@@ -284,7 +284,7 @@ public class ConfigurationResourceProvider extends
 
     ConfigurationRequest configRequest = new ConfigurationRequest(
         (String) properties.get(CONFIGURATION_CLUSTER_NAME_PROPERTY_ID),
-        type, tag, new HashMap<String, String>(), new HashMap<String, Map<String, String>>());
+        type, tag, new HashMap<>(), new HashMap<>());
 
     Set<String> requestedIds = request.getPropertyIds();
     if (requestedIds.contains("properties") || requestedIds.contains("*")) {

@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -40,12 +41,12 @@ import com.google.gson.Gson;
 
 import junit.framework.Assert;
 
-@Category({ category.KerberosTest.class})
+@Category({category.KerberosTest.class})
 public class KerberosDescriptorTest {
   private static final KerberosDescriptorFactory KERBEROS_DESCRIPTOR_FACTORY = new KerberosDescriptorFactory();
   private static final KerberosServiceDescriptorFactory KERBEROS_SERVICE_DESCRIPTOR_FACTORY = new KerberosServiceDescriptorFactory();
 
-  public static final String JSON_VALUE =
+  private static final String JSON_VALUE =
       "{" +
           "  \"properties\": {" +
           "      \"realm\": \"${cluster-env/kerberos_domain}\"," +
@@ -59,30 +60,101 @@ public class KerberosDescriptorTest {
           "    ]" +
           "}";
 
-  public static final Map<String, Object> MAP_VALUE;
+  private static final String JSON_VALUE_IDENTITY_REFERENCES =
+      "{" +
+          "  \"identities\": [" +
+          "    {" +
+          "      \"keytab\": {" +
+          "        \"file\": \"${keytab_dir}/spnego.service.keytab\"" +
+          "      }," +
+          "      \"name\": \"spnego\"," +
+          "      \"principal\": {" +
+          "        \"type\": \"service\"," +
+          "        \"value\": \"HTTP/_HOST@${realm}\"" +
+          "      }" +
+          "    }" +
+          "  ]," +
+          "  \"services\": [" +
+          "    {" +
+          "      \"identities\": [" +
+          "        {" +
+          "          \"name\": \"service1_spnego\"," +
+          "          \"reference\": \"/spnego\"" +
+          "        }," +
+          "        {" +
+          "          \"name\": \"service1_identity\"" +
+          "        }" +
+          "      ]," +
+          "      \"name\": \"SERVICE1\"" +
+          "    }," +
+          "    {" +
+          "      \"identities\": [" +
+          "        {" +
+          "          \"name\": \"/spnego\"" +
+          "        }," +
+          "        {" +
+          "          \"name\": \"service2_identity\"" +
+          "        }" +
+          "      ]," +
+          "      \"components\": [" +
+          "        {" +
+          "          \"identities\": [" +
+          "            {" +
+          "              \"name\": \"component1_identity\"" +
+          "            }," +
+          "            {" +
+          "              \"name\": \"service2_component1_service1_identity\"," +
+          "              \"reference\": \"/SERVICE1/service1_identity\"" +
+          "            }," +
+          "            {" +
+          "              \"name\": \"service2_component1_component1_identity\"," +
+          "              \"reference\": \"./component1_identity\"" +
+          "            }," +
+          "            {" +
+          "              \"name\": \"service2_component1_service2_identity\"," +
+          "              \"reference\": \"../service2_identity\"" +
+          "            }" +
+          "          ]," +
+          "          \"name\": \"COMPONENT21\"" +
+          "        }," +
+          "        {" +
+          "          \"identities\": [" +
+          "            {" +
+          "              \"name\": \"component2_identity\"" +
+          "            }" +
+          "          ]," +
+          "          \"name\": \"COMPONENT22\"" +
+          "        }" +
+          "      ]," +
+          "      \"name\": \"SERVICE2\"" +
+          "    }" +
+          "  ]" +
+          "}";
+
+  private static final Map<String, Object> MAP_VALUE;
 
   static {
     Map<String, Object> keytabOwnerMap = new TreeMap<>();
-    keytabOwnerMap.put("name", "root");
-    keytabOwnerMap.put("access", "rw");
+    keytabOwnerMap.put(KerberosKeytabDescriptor.KEY_ACL_NAME, "root");
+    keytabOwnerMap.put(KerberosKeytabDescriptor.KEY_ACL_ACCESS, "rw");
 
     Map<String, Object> keytabGroupMap = new TreeMap<>();
-    keytabGroupMap.put("name", "hadoop");
-    keytabGroupMap.put("access", "r");
+    keytabGroupMap.put(KerberosKeytabDescriptor.KEY_ACL_NAME, "hadoop");
+    keytabGroupMap.put(KerberosKeytabDescriptor.KEY_ACL_ACCESS, "r");
 
     Map<String, Object> keytabMap = new TreeMap<>();
-    keytabMap.put("file", "/etc/security/keytabs/subject.service.keytab");
-    keytabMap.put("owner", keytabOwnerMap);
-    keytabMap.put("group", keytabGroupMap);
-    keytabMap.put("configuration", "service-site/service2.component.keytab.file");
+    keytabMap.put(KerberosKeytabDescriptor.KEY_FILE, "/etc/security/keytabs/subject.service.keytab");
+    keytabMap.put(KerberosKeytabDescriptor.KEY_OWNER, keytabOwnerMap);
+    keytabMap.put(KerberosKeytabDescriptor.KEY_GROUP, keytabGroupMap);
+    keytabMap.put(KerberosKeytabDescriptor.KEY_CONFIGURATION, "service-site/service2.component.keytab.file");
 
     Map<String, Object> sharedIdentityMap = new TreeMap<>();
-    sharedIdentityMap.put("name", "shared");
-    sharedIdentityMap.put("principal", KerberosPrincipalDescriptorTest.MAP_VALUE);
-    sharedIdentityMap.put("keytab", keytabMap);
+    sharedIdentityMap.put(KerberosIdentityDescriptor.KEY_NAME, "shared");
+    sharedIdentityMap.put(KerberosIdentityDescriptor.KEY_PRINCIPAL, KerberosPrincipalDescriptorTest.MAP_VALUE);
+    sharedIdentityMap.put(KerberosIdentityDescriptor.KEY_KEYTAB, keytabMap);
 
     Map<String, Object> servicesMap = new TreeMap<>();
-    servicesMap.put((String) KerberosServiceDescriptorTest.MAP_VALUE.get("name"), KerberosServiceDescriptorTest.MAP_VALUE);
+    servicesMap.put((String) KerberosServiceDescriptorTest.MAP_VALUE.get(KerberosServiceDescriptor.KEY_NAME), KerberosServiceDescriptorTest.MAP_VALUE);
 
     Map<String, Object> identitiesMap = new TreeMap<>();
     identitiesMap.put("shared", sharedIdentityMap);
@@ -104,14 +176,14 @@ public class KerberosDescriptorTest {
     properties.put("some.property", "Hello World");
 
     MAP_VALUE = new TreeMap<>();
-    MAP_VALUE.put("properties", properties);
-    MAP_VALUE.put(AbstractKerberosDescriptor.Type.AUTH_TO_LOCAL_PROPERTY.getDescriptorPluralName(), authToLocalRules);
-    MAP_VALUE.put(AbstractKerberosDescriptor.Type.SERVICE.getDescriptorPluralName(), servicesMap.values());
-    MAP_VALUE.put(AbstractKerberosDescriptor.Type.CONFIGURATION.getDescriptorPluralName(), configurationsMap.values());
-    MAP_VALUE.put(AbstractKerberosDescriptor.Type.IDENTITY.getDescriptorPluralName(), identitiesMap.values());
+    MAP_VALUE.put(KerberosDescriptor.KEY_PROPERTIES, properties);
+    MAP_VALUE.put(KerberosDescriptor.KEY_AUTH_TO_LOCAL_PROPERTIES, authToLocalRules);
+    MAP_VALUE.put(KerberosDescriptor.KEY_SERVICES, servicesMap.values());
+    MAP_VALUE.put(KerberosDescriptor.KEY_CONFIGURATIONS, configurationsMap.values());
+    MAP_VALUE.put(KerberosDescriptor.KEY_IDENTITIES, identitiesMap.values());
   }
 
-  public static void validateFromJSON(KerberosDescriptor descriptor) {
+  private static void validateFromJSON(KerberosDescriptor descriptor) {
     Assert.assertNotNull(descriptor);
     Assert.assertTrue(descriptor.isContainer());
 
@@ -146,7 +218,7 @@ public class KerberosDescriptorTest {
     Assert.assertNull(configurations);
   }
 
-  public static void validateFromMap(KerberosDescriptor descriptor) throws AmbariException {
+  private static void validateFromMap(KerberosDescriptor descriptor) throws AmbariException {
     Assert.assertNotNull(descriptor);
     Assert.assertTrue(descriptor.isContainer());
 
@@ -219,7 +291,7 @@ public class KerberosDescriptorTest {
     Assert.assertEquals("red", configProperties.get("property1"));
   }
 
-  public void validateUpdatedData(KerberosDescriptor descriptor) {
+  private void validateUpdatedData(KerberosDescriptor descriptor) {
     Assert.assertNotNull(descriptor);
 
     Map<String, String> properties = descriptor.getProperties();
@@ -420,7 +492,7 @@ public class KerberosDescriptorTest {
 
   @Test
   public void testGetReferencedIdentityDescriptor_Recursive() throws IOException {
-    boolean identityFound = false;
+    boolean identityFound;
     List<KerberosIdentityDescriptor> identities;
 
     URL systemResourceURL = ClassLoader.getSystemResource("kerberos/test_get_referenced_identity_descriptor.json");
@@ -482,8 +554,8 @@ public class KerberosDescriptorTest {
   public void testFiltersOutIdentitiesBasedonInstalledServices() throws IOException {
     URL systemResourceURL = ClassLoader.getSystemResource("kerberos/test_filtering_identity_descriptor.json");
     KerberosComponentDescriptor componentDescriptor = KERBEROS_DESCRIPTOR_FACTORY.createInstance(new File(systemResourceURL.getFile()))
-      .getService("SERVICE1")
-      .getComponent("SERVICE1_COMPONENT1");
+        .getService("SERVICE1")
+        .getComponent("SERVICE1_COMPONENT1");
     List<KerberosIdentityDescriptor> identities = componentDescriptor.getIdentities(true, new HashedMap() {{
       put("services", Collections.emptySet());
     }});
@@ -502,4 +574,128 @@ public class KerberosDescriptorTest {
     Assert.assertEquals("service2_component1@${realm}", principalsPerComponent.get("SERVICE2/SERVICE2_COMPONENT1/service2_component1_identity"));
     Assert.assertEquals("service1@${realm}", principalsPerComponent.get("SERVICE1/service1_identity"));
   }
+
+  @Test
+  public void testIdentityReferences() throws Exception {
+    KerberosDescriptor kerberosDescriptor = KERBEROS_DESCRIPTOR_FACTORY.createInstance(JSON_VALUE_IDENTITY_REFERENCES);
+    KerberosServiceDescriptor serviceDescriptor;
+    List<KerberosIdentityDescriptor> identities;
+
+    // Reference is determined using the "reference" attribute
+    serviceDescriptor = kerberosDescriptor.getService("SERVICE1");
+    identities = serviceDescriptor.getIdentities(true, null);
+    Assert.assertEquals(2, identities.size());
+    for (KerberosIdentityDescriptor identity : identities) {
+      if (identity.isReference()) {
+        Assert.assertEquals("service1_spnego", identity.getName());
+        Assert.assertEquals("/spnego", identity.getReference());
+      } else {
+        Assert.assertEquals("service1_identity", identity.getName());
+        Assert.assertNull(identity.getReference());
+      }
+    }
+
+    Assert.assertEquals("service1_identity", identities.get(1).getName());
+    Assert.assertNull(identities.get(1).getReference());
+
+    // Reference is determined using the "name" attribute
+    serviceDescriptor = kerberosDescriptor.getService("SERVICE2");
+    identities = serviceDescriptor.getIdentities(true, null);
+    Assert.assertEquals(2, identities.size());
+    for (KerberosIdentityDescriptor identity : identities) {
+      if (identity.isReference()) {
+        Assert.assertEquals("/spnego", identity.getName());
+        Assert.assertNull(identity.getReference());
+      } else {
+        Assert.assertEquals("service2_identity", identity.getName());
+        Assert.assertNull(identity.getReference());
+      }
+    }
+  }
+
+  @Test
+  public void testGetPath() throws Exception {
+    KerberosDescriptor kerberosDescriptor;
+    KerberosServiceDescriptor serviceDescriptor;
+    List<KerberosIdentityDescriptor> identities;
+
+    kerberosDescriptor = KERBEROS_DESCRIPTOR_FACTORY.createInstance(JSON_VALUE);
+
+    serviceDescriptor = kerberosDescriptor.getService("SERVICE_NAME");
+    identities = serviceDescriptor.getIdentities(false, null);
+    Assert.assertEquals(1, identities.size());
+    Assert.assertEquals("/SERVICE_NAME/identity_1", identities.get(0).getPath());
+
+    KerberosComponentDescriptor componentDescriptor = serviceDescriptor.getComponent("COMPONENT_NAME");
+    identities = componentDescriptor.getIdentities(false, null);
+    Assert.assertEquals(1, identities.size());
+    Assert.assertEquals("/SERVICE_NAME/COMPONENT_NAME/identity_1", identities.get(0).getPath());
+
+
+    kerberosDescriptor = KERBEROS_DESCRIPTOR_FACTORY.createInstance(JSON_VALUE_IDENTITY_REFERENCES);
+
+    serviceDescriptor = kerberosDescriptor.getService("SERVICE1");
+    identities = serviceDescriptor.getIdentities(true, null);
+    Assert.assertEquals(2, identities.size());
+    Assert.assertEquals("/SERVICE1/service1_spnego", identities.get(0).getPath());
+    Assert.assertEquals("/SERVICE1/service1_identity", identities.get(1).getPath());
+  }
+
+  @Test
+  public void testGetReferences() throws Exception {
+    KerberosDescriptor kerberosDescriptor = KERBEROS_DESCRIPTOR_FACTORY.createInstance(JSON_VALUE_IDENTITY_REFERENCES);
+    KerberosIdentityDescriptor identity;
+    List<KerberosIdentityDescriptor> references;
+    Set<String> paths;
+
+    // Find all references to /spnego
+    identity = kerberosDescriptor.getIdentity("spnego");
+    references = identity.findReferences();
+
+    Assert.assertNotNull(references);
+    Assert.assertEquals(2, references.size());
+
+    paths = collectPaths(references);
+    Assert.assertTrue(paths.contains("/SERVICE1/service1_spnego"));
+    Assert.assertTrue(paths.contains("/SERVICE2//spnego"));
+
+    // Find all references to /SERVICE1/service1_identity
+    identity = kerberosDescriptor.getService("SERVICE1").getIdentity("service1_identity");
+    references = identity.findReferences();
+
+    Assert.assertNotNull(references);
+    Assert.assertEquals(1, references.size());
+
+    paths = collectPaths(references);
+    Assert.assertTrue(paths.contains("/SERVICE2/COMPONENT21/service2_component1_service1_identity"));
+
+    // Find all references to /SERVICE2/COMPONENT21/component1_identity (testing ./)
+    identity = kerberosDescriptor.getService("SERVICE2").getComponent("COMPONENT21").getIdentity("component1_identity");
+    references = identity.findReferences();
+
+    Assert.assertNotNull(references);
+    Assert.assertEquals(1, references.size());
+
+    paths = collectPaths(references);
+    Assert.assertTrue(paths.contains("/SERVICE2/COMPONENT21/service2_component1_component1_identity"));
+
+    // Find all references to /SERVICE2/component2_identity (testing ../)
+    identity = kerberosDescriptor.getService("SERVICE2").getIdentity("service2_identity");
+    references = identity.findReferences();
+
+    Assert.assertNotNull(references);
+    Assert.assertEquals(1, references.size());
+
+    paths = collectPaths(references);
+    Assert.assertTrue(paths.contains("/SERVICE2/COMPONENT21/service2_component1_service2_identity"));
+  }
+
+  private Set<String> collectPaths(List<KerberosIdentityDescriptor> identityDescriptors) {
+    Set<String> paths = new HashSet<>();
+    for (KerberosIdentityDescriptor identityDescriptor : identityDescriptors) {
+      paths.add(identityDescriptor.getPath());
+    }
+    return paths;
+  }
+
 }

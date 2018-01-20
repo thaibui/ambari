@@ -428,7 +428,7 @@ public class AlertDefinitionResourceProviderTest {
     // creating a single definition should invalidate hosts of the definition
     expect(
         definitionHash.invalidateHosts(EasyMock.anyObject(AlertDefinitionEntity.class))).andReturn(
-        new HashSet<String>()).once();
+      new HashSet<>()).once();
 
     replay(amc, clusters, cluster, dao, definitionHash);
 
@@ -457,7 +457,7 @@ public class AlertDefinitionResourceProviderTest {
 
     // JMX
     requestProps.put("AlertDefinition/source/jmx/value",
-        source.getJmxInfo().getValue());
+        source.getJmxInfo().getValue().toString());
     requestProps.put("AlertDefinition/source/jmx/property_list",
         source.getJmxInfo().getPropertyList());
 
@@ -578,7 +578,7 @@ public class AlertDefinitionResourceProviderTest {
     // updateing a single definition should invalidate hosts of the definition
     expect(
         definitionHash.invalidateHosts(EasyMock.anyObject(AlertDefinitionEntity.class))).andReturn(
-        new HashSet<String>()).atLeastOnce();
+      new HashSet<>()).atLeastOnce();
 
     replay(amc, clusters, cluster, dao, definitionHash);
 
@@ -600,7 +600,7 @@ public class AlertDefinitionResourceProviderTest {
 
     // JMX
     requestProps.put("AlertDefinition/source/jmx/value",
-        source.getJmxInfo().getValue());
+        source.getJmxInfo().getValue().toString());
     requestProps.put("AlertDefinition/source/jmx/property_list",
         source.getJmxInfo().getPropertyList());
 
@@ -712,7 +712,7 @@ public class AlertDefinitionResourceProviderTest {
 
     // updateing a single definition should invalidate hosts of the definition
     expect(definitionHash.invalidateHosts(EasyMock.anyObject(AlertDefinitionEntity.class))).andReturn(
-        new HashSet<String>()).atLeastOnce();
+      new HashSet<>()).atLeastOnce();
 
     replay(amc, clusters, cluster, dao, definitionHash);
 
@@ -796,7 +796,7 @@ public class AlertDefinitionResourceProviderTest {
     // deleting a single definition should invalidate hosts of the definition
     expect(
         definitionHash.invalidateHosts(EasyMock.anyObject(AlertDefinitionEntity.class))).andReturn(
-        new HashSet<String>()).atLeastOnce();
+      new HashSet<>()).atLeastOnce();
 
     replay(amc, clusters, cluster, dao, definitionHash);
 

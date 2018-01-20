@@ -19,7 +19,9 @@
 package org.apache.ambari.server.orm;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.matchers.JUnitMatchers.containsString;
 
 import java.io.ByteArrayInputStream;
@@ -640,6 +642,94 @@ public class DBAccessorImplTest {
    }
 
   @Test
+  public void testCopyColumnToAnotherTable() throws Exception {
+    DBAccessorImpl dbAccessor = injector.getInstance(DBAccessorImpl.class);
+    String sourceTableName = getFreeTableName();
+    String targetTableName = getFreeTableName();
+    int testRowAmount = 10;
+
+    createMyTable(sourceTableName, "col1", "col2", "col3", "col4", "col5");
+    createMyTable(targetTableName, "col1", "col2", "col3");
+
+    for (Integer i = 0; i < testRowAmount; i++) {
+      dbAccessor.insertRow(sourceTableName,
+          new String[]{"id", "col1", "col2", "col3", "col4", "col5"},
+          new String[]{i.toString(), String.format("'1,%s'", i), String.format("'2,%s'", i * 2), String.format("'3,%s'", i * 3), String.format("'4,%s'", i * 4), String.format("'%s'", (i * 5) % 2)}, false);
+
+      dbAccessor.insertRow(targetTableName,
+          new String[]{"id", "col1", "col2", "col3"},
+          new String[]{i.toString(), String.format("'1,%s'", i), String.format("'2,%s'", i * 2), String.format("'3,%s'", i * 3)}, false);
+    }
+
+    DBColumnInfo sourceColumn = new DBColumnInfo("col4", String.class, null, null, false);
+    DBColumnInfo targetColumn = new DBColumnInfo("col4", String.class, null, null, false);
+
+    dbAccessor.copyColumnToAnotherTable(sourceTableName, sourceColumn, "id", "col1", "col2",
+        targetTableName, targetColumn, "id", "col1", "col2", "col5", "0", "initial");
+
+    Statement statement = dbAccessor.getConnection().createStatement();
+    ResultSet resultSet = statement.executeQuery("SELECT col4 FROM " + targetTableName + " ORDER BY id");
+
+    assertNotNull(resultSet);
+
+    List<String> response = new LinkedList<>();
+
+    while (resultSet.next()) {
+      response.add(resultSet.getString(1));
+    }
+
+    assertEquals(testRowAmount, response.toArray().length);
+    for (String row : response) {
+      System.out.println(row);
+    }
+
+
+    int i = 0;
+    for (String row : response) {
+      if (i % 2 == 0) {
+        assertEquals(String.format("4,%s", i * 4), row);
+      } else {
+        assertEquals("initial", row);
+      }
+      i++;
+    }
+
+  }
+
+  @Test
+  public void testGetIntColumnValues() throws Exception {
+    DBAccessorImpl dbAccessor = injector.getInstance(DBAccessorImpl.class);
+    String sourceTableName = getFreeTableName();
+    int testRowAmount = 10;
+
+    createMyTable(sourceTableName, "col1", "col2", "col3", "col4", "col5");
+
+    for (Integer i = 0; i < testRowAmount; i++) {
+      dbAccessor.insertRow(sourceTableName,
+          new String[]{"id", "col1", "col2", "col3", "col4", "col5"},
+          new String[]{i.toString(), String.format("'1,%s'", i), String.format("'2,%s'", i * 2), String.format("'3,%s'", i * 3), String.format("'4,%s'", i * 4), String.format("'%s'", (i * 5) % 2)}, false);
+    }
+
+    List<Integer> idList = dbAccessor.getIntColumnValues(sourceTableName, "id",
+        new String[]{"col1", "col5"}, new String[]{"1,0", "0"}, false);
+
+    assertEquals(idList.size(), 1);
+    assertEquals(idList.get(0), Integer.valueOf(0));
+
+    idList = dbAccessor.getIntColumnValues(sourceTableName, "id",
+        new String[]{"col5"}, new String[]{"0"}, false);
+
+    assertEquals(idList.size(), 5);
+
+    int i = 0;
+    for (Integer id : idList) {
+      assertEquals(id, Integer.valueOf(i * 2));
+      i++;
+    }
+
+  }
+
+  @Test
   public void testMoveNonexistentColumnIsNoop() throws Exception {
     DBAccessorImpl dbAccessor = injector.getInstance(DBAccessorImpl.class);
     String sourceTableName = getFreeTableName();
@@ -666,5 +756,33 @@ public class DBAccessorImplTest {
       targetTableName, targetColumn, "id", "initial");
 
     // should not result in exception due to unknown column in source table
+  }
+
+  @Test
+  public void testDbColumnInfoEqualsAndHash() {
+    DBColumnInfo column1 = new DBColumnInfo("col", String.class, null, null, false);
+    DBColumnInfo equalsColumn1 = new DBColumnInfo("col", String.class, null, null, false);
+    DBColumnInfo notEqualsColumn1Name = new DBColumnInfo("col1", String.class, null, null, false);
+    DBColumnInfo notEqualsColumn1Type = new DBColumnInfo("col", Integer.class, null, null, false);
+    DBColumnInfo notEqualsColumn1Length = new DBColumnInfo("col", String.class, 10, null, false);
+    DBColumnInfo notEqualsColumn1DefaultValue = new DBColumnInfo("col", String.class, null, "default", false);
+    DBColumnInfo notEqualsColumn1DefaultValueEmptyString = new DBColumnInfo("col", String.class, null, "", false);
+    DBColumnInfo notEqualsColumn1Nullable = new DBColumnInfo("col", String.class, null, null, true);
+
+    assertTrue(column1.hashCode() == equalsColumn1.hashCode());
+    assertFalse(column1.hashCode() == notEqualsColumn1Name.hashCode());
+    assertFalse(column1.hashCode() == notEqualsColumn1Type.hashCode());
+    assertFalse(column1.hashCode() == notEqualsColumn1Length.hashCode());
+    assertFalse(column1.hashCode() == notEqualsColumn1DefaultValue.hashCode());
+    assertTrue(column1.hashCode() == notEqualsColumn1DefaultValueEmptyString.hashCode()); // null and "" yield the same hashcode
+    assertFalse(column1.hashCode() == notEqualsColumn1Nullable.hashCode());
+
+    assertTrue(column1.equals(equalsColumn1));
+    assertFalse(column1.equals(notEqualsColumn1Name));
+    assertFalse(column1.equals(notEqualsColumn1Type));
+    assertFalse(column1.equals(notEqualsColumn1Length));
+    assertFalse(column1.equals(notEqualsColumn1DefaultValue));
+    assertFalse(column1.equals(notEqualsColumn1DefaultValueEmptyString));
+    assertFalse(column1.equals(notEqualsColumn1Nullable));
   }
 }

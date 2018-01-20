@@ -188,13 +188,22 @@ App.ServiceConfigsByCategoryView = Em.View.extend(App.Persist, App.ConfigOverrid
    * @type {boolean}
    */
   isShowBlock: function () {
-    var isCustomPropertiesCategory = this.get('category.customCanAddProperty');
-    var hasFilteredAdvancedConfigs = this.get('categoryConfigs').filter(function (config) {
+    const isFilterEmpty = this.get('controller.filter') === '';
+    const isFilterActive = this.get('mainView.columns') && this.get('mainView.columns').someProperty('selected');
+    const isCustomPropertiesCategory = this.get('category.customCanAddProperty');
+    const isCompareMode = this.get('controller.isCompareMode');
+    const hasFilteredAdvancedConfigs = this.get('categoryConfigs').filter(function (config) {
         return config.get('isHiddenByFilter') === false && Em.isNone(config.get('widget'));
       }, this).length > 0;
-    return (isCustomPropertiesCategory && this.get('controller.filter') === '' && !this.get('mainView.columns').someProperty('selected')) ||
+    return (isCustomPropertiesCategory && !isCompareMode && isFilterEmpty && !isFilterActive) ||
       hasFilteredAdvancedConfigs;
-  }.property('category.customCanAddProperty', 'categoryConfigs.@each.isHiddenByFilter', 'categoryConfigs.@each.widget', 'controller.filter', 'mainView.columns.@each.selected'),
+  }.property(
+    'category.customCanAddProperty',
+    'categoryConfigs.@each.isHiddenByFilter',
+    'categoryConfigs.@each.widget',
+    'controller.filter',
+    'controller.isCompareMode',
+    'mainView.columns.@each.selected'),
 
   /**
    * Re-order the configs to list content displayType properties at last in the category
@@ -430,6 +439,7 @@ App.ServiceConfigsByCategoryView = Em.View.extend(App.Persist, App.ConfigOverrid
   createProperty: function (propertyObj) {
     var config;
     var selectedConfigGroup = this.get('controller.selectedConfigGroup');
+    var categoryConfigsAll = this.get('categoryConfigsAll');
     if (selectedConfigGroup.get('isDefault')) {
       config = App.config.createDefaultConfig(propertyObj.name, propertyObj.filename, false, {
         value: propertyObj.value,
@@ -447,7 +457,13 @@ App.ServiceConfigsByCategoryView = Em.View.extend(App.Persist, App.ConfigOverrid
         isNotSaved: true
       }, selectedConfigGroup);
     }
-    this._appendConfigToCollection(App.ServiceConfigProperty.create(config));
+    var serviceConfigProperty = App.ServiceConfigProperty.create(config);
+    var duplicatedProperty = categoryConfigsAll.findProperty('name', config.name);
+    if (duplicatedProperty && duplicatedProperty.get('isUndefinedLabel')) {
+      serviceConfigProperty.set('overrides', duplicatedProperty.get('overrides'));
+      categoryConfigsAll.removeAt(categoryConfigsAll.indexOf(duplicatedProperty));
+    }
+    this._appendConfigToCollection(serviceConfigProperty);
   },
 
   /**
@@ -457,6 +473,7 @@ App.ServiceConfigsByCategoryView = Em.View.extend(App.Persist, App.ConfigOverrid
   _appendConfigToCollection: function (serviceConfigProperty) {
     this.get('serviceConfigs').pushObject(serviceConfigProperty);
     this.get('categoryConfigsAll').pushObject(serviceConfigProperty);
+    this.setVisibleCategoryConfigs();
   },
 
   /**
@@ -471,7 +488,8 @@ App.ServiceConfigsByCategoryView = Em.View.extend(App.Persist, App.ConfigOverrid
     var serviceName = service.get('serviceName');
 
     var configsOfFile = service.get('configs').filterProperty('filename', siteFileName);
-    return configsOfFile.findProperty('name', name);
+    var duplicatedProperty = configsOfFile.findProperty('name', name);
+    return duplicatedProperty && !duplicatedProperty.get('isUndefinedLabel');
   },
 
   /**
@@ -484,7 +502,8 @@ App.ServiceConfigsByCategoryView = Em.View.extend(App.Persist, App.ConfigOverrid
     var configFiles = service.get('configs').mapProperty('filename').uniq();
     configFiles.forEach(function (configFile) {
       var configsOfFile = service.get('configs').filterProperty('filename', configFile);
-      if (configsOfFile.findProperty('name', name)) {
+      var duplicatedProperty = configsOfFile.findProperty('name', name);
+      if (duplicatedProperty && !duplicatedProperty.get('isUndefinedLabel')) {
         files.push(configFile);
       }
     }, this);

@@ -17,12 +17,15 @@
  */
 package org.apache.ambari.server.state;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -36,10 +39,12 @@ import org.apache.ambari.server.controller.AmbariManagementController;
 import org.apache.ambari.server.orm.dao.ClusterDAO;
 import org.apache.ambari.server.orm.entities.ClusterConfigEntity;
 import org.apache.ambari.server.orm.entities.HostComponentDesiredStateEntity;
+import org.apache.ambari.server.stack.StackDirectory;
 import org.apache.ambari.server.state.PropertyInfo.PropertyType;
 import org.apache.ambari.server.state.configgroup.ConfigGroup;
 import org.apache.ambari.server.utils.SecretReference;
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.math.NumberUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,6 +76,8 @@ public class ConfigHelper {
    */
   private final Cache<Integer, Boolean> staleConfigsCache;
 
+  private final Cache<Integer, String> refreshConfigCommandCache;
+
   private static final Logger LOG =
       LoggerFactory.getLogger(ConfigHelper.class);
 
@@ -92,6 +99,7 @@ public class ConfigHelper {
   public static final String CLUSTER_ENV_STACK_FEATURES_PROPERTY = "stack_features";
   public static final String CLUSTER_ENV_STACK_TOOLS_PROPERTY = "stack_tools";
   public static final String CLUSTER_ENV_STACK_ROOT_PROPERTY = "stack_root";
+  public static final String CLUSTER_ENV_STACK_PACKAGES_PROPERTY = "stack_packages";
 
   public static final String HTTP_ONLY = "HTTP_ONLY";
   public static final String HTTPS_ONLY = "HTTPS_ONLY";
@@ -111,6 +119,9 @@ public class ConfigHelper {
     STALE_CONFIGS_CACHE_EXPIRATION_TIME = configuration.staleConfigCacheExpiration();
     staleConfigsCache = CacheBuilder.newBuilder().
         expireAfterWrite(STALE_CONFIGS_CACHE_EXPIRATION_TIME, TimeUnit.SECONDS).build();
+
+    refreshConfigCommandCache = CacheBuilder.newBuilder().
+            expireAfterWrite(STALE_CONFIGS_CACHE_EXPIRATION_TIME, TimeUnit.SECONDS).build();
   }
 
   /**
@@ -287,6 +298,11 @@ public class ConfigHelper {
     return properties;
   }
 
+  public Map<String, Map<String, String>> getEffectiveConfigProperties(String clusterName, String hostName) throws AmbariException {
+    Cluster cluster = clusters.getCluster(clusterName);
+    return getEffectiveConfigProperties(cluster, getEffectiveDesiredTags(cluster, hostName));
+  }
+
   /**
    * Get all config attributes for a cluster given a set of configType to
    * versionTags map. This helper method merges all the override tags with a
@@ -398,7 +414,7 @@ public class ConfigHelper {
       for (Entry<String, Map<String, String>> attributesEntry : sourceAttributesMap.entrySet()) {
         String attributeName = attributesEntry.getKey();
         if (!targetAttributesMap.containsKey(attributeName)) {
-          targetAttributesMap.put(attributeName, new TreeMap<String, String>());
+          targetAttributesMap.put(attributeName, new TreeMap<>());
         }
         for (Entry<String, String> attributesValue : attributesEntry.getValue().entrySet()) {
           targetAttributesMap.get(attributeName).put(attributesValue.getKey(), attributesValue.getValue());
@@ -410,7 +426,7 @@ public class ConfigHelper {
   public void applyCustomConfig(Map<String, Map<String, String>> configurations,
                                 String type, String name, String value, Boolean deleted) {
     if (!configurations.containsKey(type)) {
-      configurations.put(type, new HashMap<String, String>());
+      configurations.put(type, new HashMap<>());
     }
     String nameToUse = deleted ? DELETED + name : name;
     Map<String, String> properties = configurations.get(type);
@@ -1069,7 +1085,7 @@ public class ConfigHelper {
       String authenticatedUserName, String serviceVersionNote) throws AmbariException {
 
     createConfigType(cluster, stackId, controller, configType, properties,
-        new HashMap<String, Map<String, String>>(), authenticatedUserName, serviceVersionNote);
+      new HashMap<>(), authenticatedUserName, serviceVersionNote);
   }
 
   public void createConfigType(Cluster cluster, StackId stackId,
@@ -1108,16 +1124,15 @@ public class ConfigHelper {
       Map<String, String> properties = entry.getValue();
 
       Config baseConfig = createConfig(cluster, stackId, controller, type, FIRST_VERSION_TAG,
-          properties, Collections.<String, Map<String, String>> emptyMap());
+          properties, Collections.emptyMap());
 
       if (null != baseConfig) {
         try {
-          String service = cluster.getServiceForConfigTypes(Collections.singleton(type));
+          String service = cluster.getServiceByConfigType(type);
           if (!serviceMapped.containsKey(service)) {
-            serviceMapped.put(service, new HashSet<Config>());
+            serviceMapped.put(service, new HashSet<>());
           }
           serviceMapped.get(service).add(baseConfig);
-
         } catch (Exception e) {
           // !!! ignore
         }
@@ -1208,7 +1223,7 @@ public class ConfigHelper {
       String type = ConfigHelper.fileNameToConfigType(stackDefaultProperty.getFilename());
 
       if (!defaultPropertiesByType.containsKey(type)) {
-        defaultPropertiesByType.put(type, new HashMap<String, String>());
+        defaultPropertiesByType.put(type, new HashMap<>());
       }
 
       defaultPropertiesByType.get(type).put(stackDefaultProperty.getName(),
@@ -1240,12 +1255,11 @@ public class ConfigHelper {
       String type = ConfigHelper.fileNameToConfigType(stackDefaultProperty.getFilename());
 
       if (!defaultPropertiesByType.containsKey(type)) {
-        defaultPropertiesByType.put(type, new HashMap<String, String>());
+        defaultPropertiesByType.put(type, new HashMap<>());
       }
-      if (stackDefaultProperty.getPropertyStackUpgradeBehavior().isMerge()) {
-        defaultPropertiesByType.get(type).put(stackDefaultProperty.getName(),
-            stackDefaultProperty.getValue());
-      }
+
+      defaultPropertiesByType.get(type).put(stackDefaultProperty.getName(),
+          stackDefaultProperty.getValue());
     }
 
     // for every installed service, populate the default service properties
@@ -1257,12 +1271,11 @@ public class ConfigHelper {
       String type = ConfigHelper.fileNameToConfigType(serviceDefaultProperty.getFilename());
 
       if (!defaultPropertiesByType.containsKey(type)) {
-        defaultPropertiesByType.put(type, new HashMap<String, String>());
+        defaultPropertiesByType.put(type, new HashMap<>());
       }
-      if (serviceDefaultProperty.getPropertyStackUpgradeBehavior().isMerge()) {
-        defaultPropertiesByType.get(type).put(serviceDefaultProperty.getName(),
-            serviceDefaultProperty.getValue());
-      }
+
+      defaultPropertiesByType.get(type).put(serviceDefaultProperty.getName(),
+          serviceDefaultProperty.getValue());
     }
 
     return defaultPropertiesByType;
@@ -1303,6 +1316,8 @@ public class ConfigHelper {
 
     StackId stackId = sch.getServiceComponent().getDesiredStackId();
 
+    StackInfo stackInfo = ambariMetaInfo.getStack(stackId);
+
     ServiceInfo serviceInfo = ambariMetaInfo.getService(stackId.getStackName(),
             stackId.getStackVersion(), sch.getServiceName());
 
@@ -1317,8 +1332,10 @@ public class ConfigHelper {
     // ---- merge values, determine changed keys, check stack: stale
 
     Iterator<Entry<String, Map<String, String>>> it = desired.entrySet().iterator();
+    List<String> changedProperties = new LinkedList<>();
 
-    while (it.hasNext() && !stale) {
+    while (it.hasNext()) {
+      boolean staleEntry = false;
       Entry<String, Map<String, String>> desiredEntry = it.next();
 
       String type = desiredEntry.getKey();
@@ -1326,27 +1343,106 @@ public class ConfigHelper {
 
       if (!actual.containsKey(type)) {
         // desired is set, but actual is not
-        if (!serviceInfo.hasConfigDependency(type)) {
-          stale = componentInfo != null && componentInfo.hasConfigType(type);
-        } else {
-          stale = true;
-        }
+        staleEntry = (serviceInfo.hasConfigDependency(type) || componentInfo.hasConfigType(type));
       } else {
         // desired and actual both define the type
         HostConfig hc = actual.get(type);
         Map<String, String> actualTags = buildTags(hc);
 
         if (!isTagChanged(tags, actualTags, hasGroupSpecificConfigsForType(cluster, sch.getHostName(), type))) {
-          stale = false;
+          staleEntry = false;
         } else {
-          stale = serviceInfo.hasConfigDependency(type) || componentInfo.hasConfigType(type);
+          staleEntry = (serviceInfo.hasConfigDependency(type) || componentInfo.hasConfigType(type));
+          if (staleEntry) {
+            Collection<String> changedKeys = findChangedKeys(cluster, type, tags.values(), actualTags.values());
+            changedProperties.addAll(changedKeys);
+          }
+        }
+      }
+      stale = stale | staleEntry;
+    }
+    
+    String refreshCommand = calculateRefreshCommand(stackInfo.getRefreshCommandConfiguration(), sch, changedProperties);
+
+    if (STALE_CONFIGS_CACHE_ENABLED) {
+      staleConfigsCache.put(staleHash, stale);
+      if (refreshCommand != null) {
+        refreshConfigCommandCache.put(staleHash, refreshCommand);
+      }
+    }
+
+    // gather all changed properties and see if we can find a common refreshConfigs command for this component
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Changed properties {} ({}) {} :  COMMAND: {}", stale, sch.getServiceComponentName(), sch.getHostName(), refreshCommand);
+      for (String p : changedProperties) {
+        LOG.debug(p);
+      }
+    }
+
+    return stale;
+  }
+
+  public String getRefreshConfigsCommand(Cluster cluster, String hostName, String serviceName, String componentName) throws AmbariException {
+    ServiceComponent serviceComponent = cluster.getService(serviceName).getServiceComponent(componentName);
+    ServiceComponentHost sch = serviceComponent.getServiceComponentHost(hostName);
+    return getRefreshConfigsCommand(cluster, sch);
+  }
+
+  public String getRefreshConfigsCommand(Cluster cluster, ServiceComponentHost sch) throws AmbariException {
+    String refreshCommand = null;
+
+    Map<String, HostConfig> actual = sch.getActualConfigs();
+    if (STALE_CONFIGS_CACHE_ENABLED) {
+      Map<String, Map<String, String>> desired = getEffectiveDesiredTags(cluster, sch.getHostName(),
+              cluster.getDesiredConfigs());
+      int staleHash = Objects.hashCode(actual.hashCode(),
+              desired.hashCode(),
+              sch.getHostName(),
+              sch.getServiceComponentName(),
+              sch.getServiceName());
+      refreshCommand = refreshConfigCommandCache.getIfPresent(staleHash);
+    }
+    return refreshCommand;
+  }
+
+
+  /**
+   * Calculates refresh command for a set of changed properties as follows:
+   *  - if a property has no refresh command return null
+   *  - in case of multiple refresh commands: as REFRESH_CONFIGS is executed by default in case of any other command as well,
+   *  can be overriden by RELOAD_CONFIGS or any other custom command, however in case of any other different commands return null
+   *  as it's not possible to refresh all properties with one command.
+   *
+   *  examples:
+   *     {REFRESH_CONFIGS, REFRESH_CONFIGS, RELOAD_CONFIGS} ==> RELOAD_CONFIGS
+   *     {REFRESH_CONFIGS, RELOADPROXYUSERS, RELOAD_CONFIGS} ==> null
+   *
+   * @param refreshCommandConfiguration
+   * @param sch
+   * @param changedProperties
+   * @return
+   */
+  private String calculateRefreshCommand(RefreshCommandConfiguration refreshCommandConfiguration,
+                                         ServiceComponentHost sch, List<String> changedProperties) {
+
+    String finalRefreshCommand = null;
+    for (String propertyName : changedProperties) {
+      String refreshCommand = refreshCommandConfiguration.getRefreshCommandForComponent(sch, propertyName);
+      if (refreshCommand == null) {
+        return null;
+      }
+      if (finalRefreshCommand == null) {
+        finalRefreshCommand = refreshCommand;
+      }
+      if (!finalRefreshCommand.equals(refreshCommand)) {
+        if (finalRefreshCommand.equals(RefreshCommandConfiguration.REFRESH_CONFIGS)) {
+          finalRefreshCommand = refreshCommand;
+        } else if (!refreshCommand.equals(RefreshCommandConfiguration.REFRESH_CONFIGS)) {
+          return null;
         }
       }
     }
-    if (STALE_CONFIGS_CACHE_ENABLED) {
-      staleConfigsCache.put(staleHash, stale);
-    }
-    return stale;
+    return finalRefreshCommand;
   }
 
   /**
@@ -1372,6 +1468,62 @@ public class ConfigHelper {
       LOG.warn("Could not determine group configuration for host. Details: " + ambariException.getMessage());
     }
     return false;
+  }
+
+  /**
+   * @return the keys that have changed values
+   */
+  private Collection<String> findChangedKeys(Cluster cluster, String type,
+                                             Collection<String> desiredTags, Collection<String> actualTags) {
+
+    Map<String, String> desiredValues = new HashMap<>();
+    Map<String, String> actualValues = new HashMap<>();
+
+    for (String tag : desiredTags) {
+      Config config = cluster.getConfig(type, tag);
+      if (null != config) {
+        desiredValues.putAll(config.getProperties());
+      }
+    }
+
+    for (String tag : actualTags) {
+      Config config = cluster.getConfig(type, tag);
+      if (null != config) {
+        actualValues.putAll(config.getProperties());
+      }
+    }
+
+    List<String> keys = new ArrayList<>();
+
+    for (Entry<String, String> entry : desiredValues.entrySet()) {
+      String key = entry.getKey();
+      String value = entry.getValue();
+
+      if (!actualValues.containsKey(key) || !valuesAreEqual(actualValues.get(key), value)) {
+        keys.add(type + "/" + key);
+      }
+    }
+
+    return keys;
+  }
+
+  /**
+   * Checks for equality of parsed numbers if both values are numeric,
+   * otherwise using regular equality.
+   */
+  static boolean valuesAreEqual(String value1, String value2) { // exposed for unit test
+    if (NumberUtils.isNumber(value1) && NumberUtils.isNumber(value2)) {
+      try {
+        Number number1 = NumberUtils.createNumber(value1);
+        Number number2 = NumberUtils.createNumber(value2);
+        return Objects.equal(number1, number2) ||
+          number1.doubleValue() == number2.doubleValue();
+      } catch (NumberFormatException e) {
+        // fall back to regular equality
+      }
+    }
+
+    return Objects.equal(value1, value2);
   }
 
   /**
@@ -1411,7 +1563,7 @@ public class ConfigHelper {
   }
 
   public static String fileNameToConfigType(String filename) {
-    int extIndex = filename.indexOf(AmbariMetaInfo.SERVICE_CONFIG_FILE_NAME_POSTFIX);
+    int extIndex = filename.indexOf(StackDirectory.SERVICE_CONFIG_FILE_NAME_POSTFIX);
     return filename.substring(0, extIndex);
   }
 

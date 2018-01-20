@@ -34,6 +34,34 @@ describe('App.BreadcrumbItem', function () {
 
   });
 
+  describe('#transition', function() {
+
+    beforeEach(function() {
+      sinon.stub(App.router, "route");
+
+      this.breadcrumb = App.BreadcrumbItem.create({
+        label: "label",
+        route: "route"
+      });
+    })
+
+    afterEach(function() {
+      App.router.route.restore();
+    })
+
+    it('App.router.route should be called', function() {
+      this.breadcrumb.transition();
+      expect(App.router.route.calledWith('main/' + this.breadcrumb.get("route"))).to.be.true;
+    })
+
+    it('action should be called when defined', function() {
+      this.breadcrumb.action = sinon.stub();
+      this.breadcrumb.transition();
+      expect(this.breadcrumb.action.called).to.be.true;
+      expect(App.router.route.called).to.be.false;
+    })
+  })
+
 });
 
 function getCurrentState(parentStateProps, currentStateProps) {
@@ -92,6 +120,11 @@ describe('App.BreadcrumbsView', function () {
 
     it('`root` route is ignored', function () {
       currentState = getCurrentState({}, {name: 'root'});
+      expect(view.get('items')).to.be.empty;
+    });
+
+    it('`step1` route is ignored', function () {
+      currentState = getCurrentState({}, {name: 'step1'});
       expect(view.get('items')).to.be.empty;
     });
 

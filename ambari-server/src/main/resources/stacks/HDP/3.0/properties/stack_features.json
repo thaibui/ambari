@@ -104,12 +104,6 @@
         "min_version": "2.2.0.0"
       },
       {
-        "name": "create_kafka_broker_id",
-        "description": "Ambari should create Kafka Broker Id (AMBARI-12678)",
-        "min_version": "2.2.0.0",
-        "max_version": "2.3.0.0"
-      },
-      {
         "name": "kafka_listeners",
         "description": "Kafka listeners (AMBARI-10984)",
         "min_version": "2.3.0.0"
@@ -373,6 +367,12 @@
         "name": "atlas_hdfs_site_on_namenode_ha",
         "description": "Need to create hdfs-site under atlas-conf dir when Namenode-HA is enabled.",
         "min_version": "2.6.0.0"
+      },
+      {
+        "name": "oozie_extjs_included",
+        "description": "ExtJS is included in the repository and automatically installed by Ambari",
+        "min_version": "2.2.0.0",
+        "max_version": "2.6.0.0"
       }
     ]
   }

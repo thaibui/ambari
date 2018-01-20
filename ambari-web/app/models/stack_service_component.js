@@ -35,8 +35,10 @@ App.StackServiceComponent = DS.Model.extend({
   dependencies: DS.attr('array'),
   serviceName: DS.attr('string'),
   componentCategory: DS.attr('string'),
+  rollingRestartSupported: DS.attr('boolean'),
   isMaster: DS.attr('boolean'),
   isClient: DS.attr('boolean'),
+  componentType: DS.attr('string'),
   stackName: DS.attr('string'),
   stackVersion: DS.attr('string'),
   stackService: DS.belongsTo('App.StackService'),
@@ -59,6 +61,38 @@ App.StackServiceComponent = DS.Model.extend({
   maxToInstall: function() {
     return numberUtils.getCardinalityValue(this.get('cardinality'), true);
   }.property('cardinality'),
+
+  /**
+   * Check if the given component is compatible with this one. Having the same name or componentType indicates compatibility.
+   **/
+  dependsOn: function(aStackServiceComponent, opt) {
+    return this.get('dependencies').some(function(each) {
+      return aStackServiceComponent.compatibleWith(App.StackServiceComponent.find(each.componentName));
+    });
+  },
+
+  compatibleWith: function(aStackServiceComponent) {
+    return this.get('componentName') === aStackServiceComponent.get('componentName')
+      || (this.get('componentType') && this.get('componentType') === aStackServiceComponent.get('componentType'));
+  },
+
+  /**
+   * Collect dependencies which are required by this component but not installed.
+   * A compatible installed component (e.g.: componentType=HCFS_CLIENT) is not considered as a missing dependency.
+   **/
+  missingDependencies: function(installedComponents, opt) {
+    opt = opt || {};
+    opt.scope = opt.scope || '*';
+    var dependencies = this.get('dependencies');
+    dependencies = opt.scope === '*' ? dependencies : dependencies.filterProperty('scope', opt.scope);
+    if (dependencies.length == 0) return [];
+    installedComponents = installedComponents.map(function(each) { return App.StackServiceComponent.find(each); });
+    return dependencies.filter(function (dependency) {
+      return !installedComponents.some(function(each) {
+        return each.compatibleWith(App.StackServiceComponent.find(dependency.componentName));
+      });
+    }).mapProperty('componentName');
+  },
 
   /** @property {Boolean} isRequired - component required to install **/
   isRequired: Em.computed.gt('minToInstall', 0),
@@ -84,7 +118,7 @@ App.StackServiceComponent = DS.Model.extend({
 
   /** @property {Boolean} isRollinRestartAllowed - component supports rolling restart action **/
   isRollinRestartAllowed: function() {
-    return this.get('isSlave') || this.get('componentName') === 'KAFKA_BROKER';
+    return this.get('isSlave') || this.get('rollingRestartSupported');
   }.property('componentName'),
 
   /** @property {Boolean} isDecommissionAllowed - component supports decommission action **/

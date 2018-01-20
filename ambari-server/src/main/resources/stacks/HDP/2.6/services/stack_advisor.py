@@ -16,9 +16,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
-import math
-
 import json
+import math
 import re
 from resource_management.libraries.functions import format
 
@@ -32,6 +31,7 @@ class HDP26StackAdvisor(HDP25StackAdvisor):
       parentRecommendConfDict = super(HDP26StackAdvisor, self).getServiceConfigurationRecommenderDict()
       childRecommendConfDict = {
         "DRUID": self.recommendDruidConfigurations,
+        "SUPERSET": self.recommendSupersetConfigurations,
         "ATLAS": self.recommendAtlasConfigurations,
         "TEZ": self.recommendTezConfigurations,
         "RANGER": self.recommendRangerConfigurations,
@@ -40,10 +40,32 @@ class HDP26StackAdvisor(HDP25StackAdvisor):
         "HIVE": self.recommendHIVEConfigurations,
         "HBASE": self.recommendHBASEConfigurations,
         "YARN": self.recommendYARNConfigurations,
-        "KAFKA": self.recommendKAFKAConfigurations
+        "KAFKA": self.recommendKAFKAConfigurations,
+        "SPARK2": self.recommendSPARK2Configurations,
+        "ZEPPELIN": self.recommendZEPPELINConfigurations
       }
       parentRecommendConfDict.update(childRecommendConfDict)
       return parentRecommendConfDict
+
+  def recommendSPARK2Configurations(self, configurations, clusterData, services, hosts):
+    """
+    :type configurations dict
+    :type clusterData dict
+    :type services dict
+    :type hosts dict
+    """
+    super(HDP26StackAdvisor, self).recommendSpark2Configurations(configurations, clusterData, services, hosts)
+    self.__addZeppelinToLivy2SuperUsers(configurations, services)
+
+  def recommendZEPPELINConfigurations(self, configurations, clusterData, services, hosts):
+    """
+    :type configurations dict
+    :type clusterData dict
+    :type services dict
+    :type hosts dict
+    """
+    super(HDP26StackAdvisor, self).recommendZeppelinConfigurations(configurations, clusterData, services, hosts)
+    self.__addZeppelinToLivy2SuperUsers(configurations, services)
 
   def recommendAtlasConfigurations(self, configurations, clusterData, services, hosts):
     super(HDP26StackAdvisor, self).recommendAtlasConfigurations(configurations, clusterData, services, hosts)
@@ -60,6 +82,13 @@ class HDP26StackAdvisor(HDP25StackAdvisor):
       if 'gateway-site' in services['configurations'] and 'gateway.port' in services['configurations']["gateway-site"]["properties"]:
         knox_port = services['configurations']["gateway-site"]["properties"]['gateway.port']
       putAtlasApplicationProperty('atlas.sso.knox.providerurl', 'https://{0}:{1}/gateway/knoxsso/api/v1/websso'.format(knox_host, knox_port))
+
+    knox_service_user = ''
+    if 'KNOX' in servicesList and 'knox-env' in services['configurations']:
+      knox_service_user = services['configurations']['knox-env']['properties']['knox_user']
+    else:
+      knox_service_user = 'knox'
+    putAtlasApplicationProperty('atlas.proxyusers',knox_service_user)
 
   def recommendDruidConfigurations(self, configurations, clusterData, services, hosts):
 
@@ -105,7 +134,7 @@ class HDP26StackAdvisor(HDP25StackAdvisor):
           # recommend HDFS as default deep storage
           extensions_load_list = self.addToList(extensions_load_list, "druid-hdfs-storage")
           putCommonProperty("druid.storage.type", "hdfs")
-          putCommonProperty("druid.storage.storageDirectory", "/user/druid/data")
+          putCommonProperty("druid.storage.storageDirectory", "/apps/druid/warehouse")
           # configure indexer logs configs
           putCommonProperty("druid.indexer.logs.type", "hdfs")
           putCommonProperty("druid.indexer.logs.directory", "/user/druid/logs")
@@ -121,7 +150,7 @@ class HDP26StackAdvisor(HDP25StackAdvisor):
       # JVM Configs go to env properties
       putEnvProperty = self.putProperty(configurations, "druid-env", services)
 
-      # processing thread pool Config
+      # processing thread pool and memory configs
       for component in ['DRUID_HISTORICAL', 'DRUID_BROKER']:
           component_hosts = self.getHostsWithComponent("DRUID", component, services, hosts)
           nodeType = self.DRUID_COMPONENT_NODE_TYPE_MAP[component]
@@ -131,14 +160,38 @@ class HDP26StackAdvisor(HDP25StackAdvisor):
               processingThreads = 1
               if totalAvailableCpu > 1:
                   processingThreads = totalAvailableCpu - 1
+              numMergeBuffers = max(2, processingThreads/4)
               putComponentProperty('druid.processing.numThreads', processingThreads)
               putComponentProperty('druid.server.http.numThreads', max(10, (totalAvailableCpu * 17) / 16 + 2) + 30)
+              putComponentProperty('druid.processing.numMergeBuffers', numMergeBuffers)
+              totalAvailableMemInMb = self.getMinMemory(component_hosts) / 1024
+              maxAvailableBufferSizeInMb = totalAvailableMemInMb/(processingThreads + numMergeBuffers)
+              putComponentProperty('druid.processing.buffer.sizeBytes', self.getDruidProcessingBufferSizeInMb(maxAvailableBufferSizeInMb) * 1024 * 1024)
 
+
+  # returns the recommended druid processing buffer size in Mb.
+  # the recommended buffer size is kept lower then the max available memory to have enough free memory to load druid data.
+  # for low memory nodes, the actual allocated buffer size is small to keep some free memory for memory mapping of segments
+  # If user installs all druid processes on a single node, memory available for loading segments will be further decreased.
+  def getDruidProcessingBufferSizeInMb(self, maxAvailableBufferSizeInMb):
+      if maxAvailableBufferSizeInMb <= 256:
+          return min(64, maxAvailableBufferSizeInMb)
+      elif maxAvailableBufferSizeInMb <= 1024:
+          return 128
+      elif maxAvailableBufferSizeInMb <= 2048:
+          return 256
+      elif maxAvailableBufferSizeInMb <= 6144:
+          return 512
+      # High Memory nodes below
+      else :
+          return 1024
+
+  def recommendSupersetConfigurations(self, configurations, clusterData, services, hosts):
       # superset is in list of services to be installed
-      if 'druid-superset' in services['configurations']:
+      if 'superset' in services['configurations']:
         # Recommendations for Superset
-        superset_database_type = services['configurations']["druid-superset"]["properties"]["SUPERSET_DATABASE_TYPE"]
-        putSupersetProperty = self.putProperty(configurations, "druid-superset", services)
+        superset_database_type = services['configurations']["superset"]["properties"]["SUPERSET_DATABASE_TYPE"]
+        putSupersetProperty = self.putProperty(configurations, "superset", services)
 
         if superset_database_type == "mysql":
             putSupersetProperty("SUPERSET_DATABASE_PORT", "3306")
@@ -556,6 +609,55 @@ class HDP26StackAdvisor(HDP25StackAdvisor):
         putHiveAtlasHookPropertyAttribute('atlas.jaas.ticketBased-KafkaClient.loginModuleName', 'delete', 'true')
         putHiveAtlasHookPropertyAttribute('atlas.jaas.ticketBased-KafkaClient.option.useTicketCache', 'delete', 'true')
 
+    # druid is not in list of services to be installed
+    servicesList = [service["StackServices"]["service_name"] for service in services["services"]]
+    if 'DRUID' in servicesList:
+        putHiveInteractiveSiteProperty = self.putProperty(configurations, "hive-interactive-site", services)
+        if 'druid-coordinator' in services['configurations']:
+            component_hosts = self.getHostsWithComponent("DRUID", 'DRUID_COORDINATOR', services, hosts)
+            if component_hosts is not None and len(component_hosts) > 0:
+                # pick the first
+                host = component_hosts[0]
+            druid_coordinator_host_port = str(host['Hosts']['host_name']) + ":" + str(
+                services['configurations']['druid-coordinator']['properties']['druid.port'])
+        else:
+            druid_coordinator_host_port = "localhost:8081"
+
+        if 'druid-router' in services['configurations']:
+            component_hosts = self.getHostsWithComponent("DRUID", 'DRUID_ROUTER', services, hosts)
+            if component_hosts is not None and len(component_hosts) > 0:
+                # pick the first
+                host = component_hosts[0]
+            druid_broker_host_port = str(host['Hosts']['host_name']) + ":" + str(
+                services['configurations']['druid-router']['properties']['druid.port'])
+        elif 'druid-broker' in services['configurations']:
+            component_hosts = self.getHostsWithComponent("DRUID", 'DRUID_BROKER', services, hosts)
+            if component_hosts is not None and len(component_hosts) > 0:
+                # pick the first
+                host = component_hosts[0]
+            druid_broker_host_port = str(host['Hosts']['host_name']) + ":" + str(
+                services['configurations']['druid-broker']['properties']['druid.port'])
+        else:
+            druid_broker_host_port = "localhost:8083"
+
+        druid_metadata_uri = ""
+        druid_metadata_user = ""
+        druid_metadata_type = ""
+        if 'druid-common' in services['configurations']:
+            druid_metadata_uri = services['configurations']['druid-common']['properties']['druid.metadata.storage.connector.connectURI']
+            druid_metadata_type = services['configurations']['druid-common']['properties']['druid.metadata.storage.type']
+            if 'druid.metadata.storage.connector.user' in services['configurations']['druid-common']['properties']:
+                druid_metadata_user = services['configurations']['druid-common']['properties']['druid.metadata.storage.connector.user']
+            else:
+                druid_metadata_user = ""
+
+        putHiveInteractiveSiteProperty('hive.druid.broker.address.default', druid_broker_host_port)
+        putHiveInteractiveSiteProperty('hive.druid.coordinator.address.default', druid_coordinator_host_port)
+        putHiveInteractiveSiteProperty('hive.druid.metadata.uri', druid_metadata_uri)
+        putHiveInteractiveSiteProperty('hive.druid.metadata.username', druid_metadata_user)
+        putHiveInteractiveSiteProperty('hive.druid.metadata.db.type', druid_metadata_type)
+
+
   def recommendHBASEConfigurations(self, configurations, clusterData, services, hosts):
     super(HDP26StackAdvisor, self).recommendHBASEConfigurations(configurations, clusterData, services, hosts)
     if 'hbase-env' in services['configurations'] and 'hbase_user' in services['configurations']['hbase-env']['properties']:
@@ -597,3 +699,39 @@ class HDP26StackAdvisor(HDP25StackAdvisor):
       putRangerKafkaPluginProperty("REPOSITORY_CONFIG_USERNAME",kafka_user)
     else:
       self.logger.info("Not setting Kafka Repo user for Ranger.")
+
+  def __addZeppelinToLivy2SuperUsers(self, configurations, services):
+    """
+    If Kerberos is enabled AND Zeppelin is installed AND Spark2 Livy Server is installed, then set
+    livy2-conf/livy.superusers to contain the Zeppelin principal name from
+    zeppelin-env/zeppelin.server.kerberos.principal
+
+    :param configurations:
+    :param services:
+    """
+    if self.isSecurityEnabled(services):
+      zeppelin_env = self.getServicesSiteProperties(services, "zeppelin-env")
+
+      if zeppelin_env and 'zeppelin.server.kerberos.principal' in zeppelin_env:
+        zeppelin_principal = zeppelin_env['zeppelin.server.kerberos.principal']
+        zeppelin_user = zeppelin_principal.split('@')[0] if zeppelin_principal else None
+
+        if zeppelin_user:
+          livy2_conf = self.getServicesSiteProperties(services, 'livy2-conf')
+
+          if livy2_conf:
+            superusers = livy2_conf['livy.superusers'] if livy2_conf and 'livy.superusers' in livy2_conf else None
+
+            # add the Zeppelin user to the set of users
+            if superusers:
+              _superusers = superusers.split(',')
+              _superusers = [x.strip() for x in _superusers]
+              _superusers = filter(None, _superusers)  # Removes empty string elements from array
+            else:
+              _superusers = []
+
+            if zeppelin_user not in _superusers:
+              _superusers.append(zeppelin_user)
+
+              putLivy2ConfProperty = self.putProperty(configurations, 'livy2-conf', services)
+              putLivy2ConfProperty('livy.superusers', ','.join(_superusers))

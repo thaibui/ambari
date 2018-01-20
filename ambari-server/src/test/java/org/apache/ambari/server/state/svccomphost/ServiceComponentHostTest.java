@@ -20,6 +20,7 @@ package org.apache.ambari.server.state.svccomphost;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -43,6 +44,7 @@ import org.apache.ambari.server.orm.entities.ClusterEntity;
 import org.apache.ambari.server.orm.entities.HostComponentDesiredStateEntity;
 import org.apache.ambari.server.orm.entities.HostComponentStateEntity;
 import org.apache.ambari.server.orm.entities.HostEntity;
+import org.apache.ambari.server.orm.entities.HostVersionEntity;
 import org.apache.ambari.server.orm.entities.RepositoryVersionEntity;
 import org.apache.ambari.server.state.Cluster;
 import org.apache.ambari.server.state.Clusters;
@@ -51,7 +53,7 @@ import org.apache.ambari.server.state.ConfigFactory;
 import org.apache.ambari.server.state.Host;
 import org.apache.ambari.server.state.HostConfig;
 import org.apache.ambari.server.state.MaintenanceState;
-import org.apache.ambari.server.state.SecurityState;
+import org.apache.ambari.server.state.RepositoryVersionState;
 import org.apache.ambari.server.state.Service;
 import org.apache.ambari.server.state.ServiceComponent;
 import org.apache.ambari.server.state.ServiceComponentFactory;
@@ -62,9 +64,12 @@ import org.apache.ambari.server.state.ServiceComponentHostFactory;
 import org.apache.ambari.server.state.ServiceFactory;
 import org.apache.ambari.server.state.StackId;
 import org.apache.ambari.server.state.State;
+import org.apache.ambari.server.state.UpgradeState;
 import org.apache.ambari.server.state.configgroup.ConfigGroup;
 import org.apache.ambari.server.state.configgroup.ConfigGroupFactory;
 import org.apache.ambari.server.state.fsm.InvalidStateTransitionException;
+import org.apache.ambari.server.utils.EventBusSynchronizer;
+import org.apache.commons.lang3.StringUtils;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -116,16 +121,19 @@ public class ServiceComponentHostTest {
     injector.getInstance(GuiceJpaInitializer.class);
     injector.injectMembers(this);
 
+    EventBusSynchronizer.synchronizeAmbariEventPublisher(injector);
+
     StackId stackId = new StackId("HDP-2.0.6");
     createCluster(stackId, clusterName);
-    hostAttributes.put("os_family", "redhat");
-    hostAttributes.put("os_release_version", "5.9");
-
-    Set<String> hostNames = new HashSet<>();
-    hostNames.add(hostName1);
-    addHostsToCluster(clusterName, hostAttributes, hostNames);
 
     repositoryVersion = helper.getOrCreateRepositoryVersion(stackId, stackId.getStackVersion());
+
+    hostAttributes.put("os_family", "redhat");
+    hostAttributes.put("os_release_version", "5.9");
+    Set<String> hostNames = new HashSet<>();
+    hostNames.add(hostName1);
+
+    addHostsToCluster(clusterName, hostAttributes, hostNames);
   }
 
   @After
@@ -196,8 +204,6 @@ public class ServiceComponentHostTest {
 
     Assert.assertEquals(State.INIT, impl.getState());
     Assert.assertEquals(State.INIT, impl.getDesiredState());
-    Assert.assertEquals(SecurityState.UNSECURED, impl.getSecurityState());
-    Assert.assertEquals(SecurityState.UNSECURED, impl.getDesiredSecurityState());
     Assert.assertEquals(c.getClusterName(), impl.getClusterName());
     Assert.assertEquals(c.getClusterId(), impl.getClusterId());
     Assert.assertEquals(s.getName(), impl.getServiceName());
@@ -218,7 +224,7 @@ public class ServiceComponentHostTest {
     Cluster c = clusters.getCluster(clusterName);
     if (c.getConfig("time", String.valueOf(timestamp)) == null) {
       Config config = configFactory.createNew (c, "time", String.valueOf(timestamp),
-          new HashMap<String, String>(), new HashMap<String, Map<String,String>>());
+        new HashMap<>(), new HashMap<>());
     }
 
     switch (eventType) {
@@ -545,7 +551,7 @@ public class ServiceComponentHostTest {
     Cluster cluster = clusters.getCluster(clusterName);
 
     final ConfigGroup configGroup = configGroupFactory.createNew(cluster, "HDFS",
-      "cg1", "t1", "", new HashMap<String, Config>(), new HashMap<Long, Host>());
+      "cg1", "t1", "", new HashMap<>(), new HashMap<>());
 
     cluster.addConfigGroup(configGroup);
 
@@ -734,7 +740,7 @@ public class ServiceComponentHostTest {
     makeConfig(cluster, "hdfs-site", "version0",
         new HashMap<String,String>() {{
           put("a", "b");
-        }}, new HashMap<String, Map<String,String>>());
+        }}, new HashMap<>());
 
     Map<String, Map<String, String>> actual = new HashMap<String, Map<String, String>>() {{
       put("hdfs-site", new HashMap<String,String>() {{ put("tag", "version0"); }});
@@ -745,14 +751,14 @@ public class ServiceComponentHostTest {
     sch3.updateActualConfigs(actual);
 
     makeConfig(cluster, "foo", "version1",
-        new HashMap<String,String>() {{ put("a", "c"); }}, new HashMap<String, Map<String,String>>());
+        new HashMap<String,String>() {{ put("a", "c"); }}, new HashMap<>());
 
     // HDP-x/HDFS does not define type 'foo', so changes do not count to stale
     Assert.assertFalse(sch1.convertToResponse(null).isStaleConfig());
     Assert.assertFalse(sch2.convertToResponse(null).isStaleConfig());
 
     makeConfig(cluster, "hdfs-site", "version1",
-        new HashMap<String,String>() {{ put("a1", "b1"); }}, new HashMap<String, Map<String,String>>());
+        new HashMap<String,String>() {{ put("a1", "b1"); }}, new HashMap<>());
 
     // HDP-x/HDFS/hdfs-site is not on the actual, but it is defined, so it is stale
     Assert.assertTrue(sch1.convertToResponse(null).isStaleConfig());
@@ -772,7 +778,7 @@ public class ServiceComponentHostTest {
 
     makeConfig(cluster, "hdfs-site", "version2",
         new HashMap<String, String>() {{ put("dfs.journalnode.http-address", "http://foo"); }},
-        new HashMap<String, Map<String,String>>());
+      new HashMap<>());
 
     // HDP-x/HDFS/hdfs-site updated to changed property
     Assert.assertTrue(sch1.convertToResponse(null).isStaleConfig());
@@ -795,7 +801,7 @@ public class ServiceComponentHostTest {
 
     final Config c = configFactory.createNew(cluster, "hdfs-site", "version3",
         new HashMap<String, String>() {{ put("dfs.journalnode.http-address", "http://goo"); }},
-        new HashMap<String, Map<String,String>>());
+      new HashMap<>());
 
     host.addDesiredConfig(cluster.getClusterId(), true, "user", c);
     ConfigGroup configGroup = configGroupFactory.createNew(cluster, "HDFS", "g1",
@@ -820,7 +826,7 @@ public class ServiceComponentHostTest {
 
     makeConfig(cluster, "mapred-site", "version1",
       new HashMap<String, String>() {{ put("a", "b"); }},
-      new HashMap<String, Map<String,String>>());
+      new HashMap<>());
 
     actual.put("mapred-site", new HashMap<String, String>() {{ put ("tag", "version1"); }});
 
@@ -839,7 +845,7 @@ public class ServiceComponentHostTest {
       new HashMap<String,String>() {{
         put("a", "b");
         put("fs.trash.interval", "360"); // HDFS only
-      }}, new HashMap<String, Map<String,String>>());
+      }}, new HashMap<>());
 
     Assert.assertTrue(sch1.convertToResponse(null).isStaleConfig());
     Assert.assertTrue(sch2.convertToResponse(null).isStaleConfig());
@@ -853,7 +859,7 @@ public class ServiceComponentHostTest {
 
     final Config c1 = configFactory.createNew(cluster, "core-site", "version2",
       new HashMap<String, String>() {{ put("fs.trash.interval", "400"); }},
-      new HashMap<String, Map<String,String>>());
+      new HashMap<>());
     configGroup = configGroupFactory.createNew(cluster, "HDFS", "g2",
       "t2", "", new HashMap<String, Config>() {{ put("core-site", c1); }},
       new HashMap<Long, Host>() {{ put(hostEntity.getHostId(), host); }});
@@ -923,11 +929,11 @@ public class ServiceComponentHostTest {
           put("a", "b");
           put("dfs_namenode_name_dir", "/foo1"); // HDFS only
           put("mapred_log_dir_prefix", "/foo2"); // MR2 only
-        }}, new HashMap<String, Map<String,String>>());
+        }}, new HashMap<>());
     makeConfig(cluster, "hdfs-site", "version1",
         new HashMap<String,String>() {{
           put("hdfs1", "hdfs1value1");
-        }}, new HashMap<String, Map<String,String>>());
+        }}, new HashMap<>());
     Map<String, Map<String, String>> actual = new HashMap<String, Map<String, String>>() {{
       put("global", new HashMap<String,String>() {{ put("tag", "version1"); }});
       put("hdfs-site", new HashMap<String,String>() {{ put("tag", "version1"); }});
@@ -957,7 +963,7 @@ public class ServiceComponentHostTest {
 
     // Now add config-attributes
     Map<String, Map<String, String>> c1PropAttributes = new HashMap<>();
-    c1PropAttributes.put("final", new HashMap<String, String>());
+    c1PropAttributes.put("final", new HashMap<>());
     c1PropAttributes.get("final").put("hdfs1", "true");
     makeConfig(cluster, "hdfs-site", "version2",
         new HashMap<String,String>() {{
@@ -972,7 +978,7 @@ public class ServiceComponentHostTest {
 
     // Now change config-attributes
     Map<String, Map<String, String>> c2PropAttributes = new HashMap<>();
-    c2PropAttributes.put("final", new HashMap<String, String>());
+    c2PropAttributes.put("final", new HashMap<>());
     c2PropAttributes.get("final").put("hdfs1", "false");
     makeConfig(cluster, "hdfs-site", "version3",
         new HashMap<String,String>() {{
@@ -989,7 +995,7 @@ public class ServiceComponentHostTest {
     makeConfig(cluster, "hdfs-site", "version4",
         new HashMap<String,String>() {{
           put("hdfs1", "hdfs1value1");
-        }}, new HashMap<String, Map<String,String>>());
+        }}, new HashMap<>());
     sch1.setRestartRequired(false);
     sch2.setRestartRequired(false);
     sch3.setRestartRequired(false);
@@ -1055,50 +1061,86 @@ public class ServiceComponentHostTest {
     Assert.assertEquals(MaintenanceState.ON, entity.getMaintenanceState());
   }
 
-
+  /**
+   * Tests that the host version for a repository can transition properly to
+   * CURRENT even if other components on that host have not reported in correct
+   * for their own repo versions. This assures that the host version logic is
+   * scoped to the repo that is transitioning and is not affected by other
+   * components.
+   *
+   * @throws Exception
+   */
   @Test
-  public void testSecurityState() throws Exception {
-    String stackVersion = "HDP-2.0.6";
-    StackId stackId = new StackId(stackVersion);
-    String clusterName = "c2";
-    createCluster(stackId, clusterName);
+  public void testHostVersionTransitionIsScopedByRepository() throws Exception {
+    // put the existing host versions OUT_OF_SYNC
+    HostEntity hostEntity = hostDAO.findByName(hostName1);
+    Collection<HostVersionEntity> hostVersions = hostEntity.getHostVersionEntities();
+    Assert.assertEquals(1, hostVersions.size());
+    hostVersions.iterator().next().setState(RepositoryVersionState.OUT_OF_SYNC);
+    hostDAO.merge(hostEntity);
 
-    final String hostName = "h3";
-    Set<String> hostNames = new HashSet<>();
-    hostNames.add(hostName);
-    addHostsToCluster(clusterName, hostAttributes, hostNames);
+    ServiceComponentHost namenode = createNewServiceComponentHost(clusterName, "HDFS", "NAMENODE", hostName1, false);
+    namenode.setDesiredState(State.STARTED);
+    namenode.setState(State.STARTED);
 
-    Cluster cluster = clusters.getCluster(clusterName);
+    ServiceComponentHost datanode = createNewServiceComponentHost(clusterName, "HDFS", "DATANODE", hostName1, false);
+    datanode.setDesiredState(State.STARTED);
+    datanode.setState(State.STARTED);
 
-    helper.getOrCreateRepositoryVersion(stackId, stackId.getStackVersion());
+    ServiceComponentHost zkServer = createNewServiceComponentHost(clusterName, "ZOOKEEPER", "ZOOKEEPER_SERVER", hostName1, false);
+    zkServer.setDesiredState(State.STARTED);
+    zkServer.setState(State.STARTED);
 
-    HostEntity hostEntity = hostDAO.findByName(hostName);
-    ServiceComponentHost sch1 = createNewServiceComponentHost(cluster, "HDFS", "NAMENODE", hostName);
+    ServiceComponentHost zkClient = createNewServiceComponentHost(clusterName, "ZOOKEEPER", "ZOOKEEPER_CLIENT", hostName1, true);
+    zkClient.setDesiredState(State.STARTED);
+    zkClient.setState(State.STARTED);
 
-    HostComponentDesiredStateEntity entityHostComponentDesiredState;
-    HostComponentStateEntity entityHostComponentState;
+    // put some host components into a bad state
+    hostEntity = hostDAO.findByName(hostName1);
+    Collection<HostComponentStateEntity> hostComponentStates = hostEntity.getHostComponentStateEntities();
+    for( HostComponentStateEntity hostComponentState : hostComponentStates ) {
+      if( StringUtils.equals("HDFS", hostComponentState.getServiceName() ) ) {
+        hostComponentState.setVersion(State.UNKNOWN.name());
+        hostComponentStateDAO.merge(hostComponentState);
+      }
+    }
 
-    for(SecurityState state: SecurityState.values()) {
-      sch1.setSecurityState(state);
-      entityHostComponentState = hostComponentStateDAO.findByIndex(cluster.getClusterId(),
-          sch1.getServiceName(), sch1.getServiceComponentName(), hostEntity.getHostId());
+    // create the repo just for ZK
+    StackId stackId = new StackId("HDP-2.2.0");
+    RepositoryVersionEntity patchRepositoryVersion = helper.getOrCreateRepositoryVersion(stackId, "2.2.0.0-1");
 
-      Assert.assertNotNull(entityHostComponentState);
-      Assert.assertEquals(state, entityHostComponentState.getSecurityState());
+    // create the new host version
+    zkServer.getServiceComponent().setDesiredRepositoryVersion(patchRepositoryVersion);
+    zkClient.getServiceComponent().setDesiredRepositoryVersion(patchRepositoryVersion);
 
-      try {
-        sch1.setDesiredSecurityState(state);
-        Assert.assertTrue(state.isEndpoint());
-        entityHostComponentDesiredState = hostComponentDesiredStateDAO.findByIndex(
-          cluster.getClusterId(),
-          sch1.getServiceName(),
-          sch1.getServiceComponentName(),
-          hostEntity.getHostId()
-        );
-        Assert.assertNotNull(entityHostComponentDesiredState);
-        Assert.assertEquals(state, entityHostComponentDesiredState.getSecurityState());
-      } catch (AmbariException e) {
-        Assert.assertFalse(state.isEndpoint());
+    helper.createHostVersion(hostName1, patchRepositoryVersion, RepositoryVersionState.INSTALLED);
+
+    // move ZK components to UPGRADED and reporting the new version
+    hostEntity = hostDAO.findByName(hostName1);
+    hostComponentStates = hostEntity.getHostComponentStateEntities();
+    for( HostComponentStateEntity hostComponentState : hostComponentStates ) {
+      if( StringUtils.equals("ZOOKEEPER", hostComponentState.getServiceName() ) ) {
+        hostComponentState.setVersion(patchRepositoryVersion.getVersion());
+        hostComponentState.setUpgradeState(UpgradeState.COMPLETE);
+        hostComponentStateDAO.merge(hostComponentState);
+      }
+    }
+
+    hostEntity = hostDAO.merge(hostEntity);
+
+    zkServer.recalculateHostVersionState();
+
+    // very transition to CURRENT
+    hostVersions = hostEntity.getHostVersionEntities();
+    Assert.assertEquals(2, hostVersions.size());
+
+    for (HostVersionEntity hostVersion : hostVersions) {
+      if (hostVersion.getRepositoryVersion().equals(repositoryVersion)) {
+        Assert.assertEquals(RepositoryVersionState.OUT_OF_SYNC, hostVersion.getState());
+      } else if (hostVersion.getRepositoryVersion().equals(patchRepositoryVersion)) {
+        Assert.assertEquals(RepositoryVersionState.CURRENT, hostVersion.getState());
+      } else {
+        Assert.fail("Unexpected repository version");
       }
     }
   }

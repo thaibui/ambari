@@ -412,6 +412,7 @@ def init_action_parser(action, parser):
   parser.add_option('--skip-database-check', action="store_true", default=False, help="Skip database consistency check", dest="skip_database_check")
   parser.add_option('--skip-view-extraction', action="store_true", default=False, help="Skip extraction of system views", dest="skip_view_extraction")
   parser.add_option('--auto-fix-database', action="store_true", default=False, help="Automatically fix database consistency issues", dest="fix_database_consistency")
+  parser.add_option('--enable-lzo-under-gpl-license', action="store_true", default=False, help="Automatically accepts GPL license", dest="accept_gpl")
   add_parser_options('--mpack',
       default=None,
       help="Specify the path for management pack to be installed/upgraded",
@@ -490,6 +491,7 @@ def init_setup_parser_options(parser):
   other_group.add_option('--sqla-server-name', default=None, help="SQL Anywhere server name", dest="sqla_server_name")
   other_group.add_option('--sidorsname', default="sname", help="Oracle database identifier type, Service ID/Service "
                                                                "Name sid|sname", dest="sid_or_sname")
+  other_group.add_option('--enable-lzo-under-gpl-license', action="store_true", default=False, help="Automatically accepts GPL license", dest="accept_gpl")
 
   parser.add_option_group(other_group)
 
@@ -623,7 +625,6 @@ def init_kerberos_setup_parser_options(parser):
   parser.add_option('--kerberos-enabled', default=False, help="Kerberos enabled", dest="kerberos_enabled")
   parser.add_option('--kerberos-spnego-principal', default="HTTP/_HOST", help="Kerberos SPNEGO principal", dest="kerberos_spnego_principal")
   parser.add_option('--kerberos-spnego-keytab-file', default="/etc/security/keytabs/spnego.service.keytab", help="Kerberos SPNEGO keytab file", dest="kerberos_spnego_keytab_file")
-  parser.add_option('--kerberos-spnego-user-types', default="LDAP", help="User type search order (comma-delimited)", dest="kerberos_user_types")
   parser.add_option('--kerberos-auth-to-local-rules', default="DEFAULT", help="Auth-to-local rules", dest="kerberos_auth_to_local_rules")
 
 
@@ -962,6 +963,11 @@ def main(options, args, parser):
 def mainBody():
   parser = optparse.OptionParser(usage="usage: %prog action [options]",)
   action = sys.argv[1]
+
+  if action == "setup-ldap":
+    print "setup-ldap action is deprecated. Please configure LDAP integration from the Ambari UI"
+    sys.exit(0)
+
   init_action_parser(action, parser)
   (options, args) = parser.parse_args()
 

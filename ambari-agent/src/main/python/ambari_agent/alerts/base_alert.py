@@ -255,7 +255,8 @@ class BaseAlert(object):
     
     if uri_structure is None:
       return None
-    
+
+    acceptable_codes_key = None
     http_key = None
     https_key = None
     https_property_key = None
@@ -267,7 +268,10 @@ class BaseAlert(object):
     ha_alias_key = None
     ha_http_pattern = None
     ha_https_pattern = None
-    
+
+    if 'acceptable_codes' in uri_structure:
+      acceptable_codes_key = uri_structure['acceptable_codes']
+
     if 'http' in uri_structure:
       http_key = uri_structure['http']
     
@@ -306,11 +310,14 @@ class BaseAlert(object):
 
 
     AlertUriLookupKeys = namedtuple('AlertUriLookupKeys', 
-      'http https https_property https_property_value default_port '
+      'acceptable_codes http https https_property https_property_value default_port '
       'kerberos_keytab kerberos_principal '
       'ha_nameservice ha_alias_key ha_http_pattern ha_https_pattern')
     
-    alert_uri_lookup_keys = AlertUriLookupKeys(http=http_key, https=https_key, 
+    alert_uri_lookup_keys = AlertUriLookupKeys(
+      acceptable_codes=acceptable_codes_key,
+      http=http_key,
+      https=https_key,
       https_property=https_property_key,
       https_property_value=https_property_value_key, default_port=default_port,
       kerberos_keytab=kerberos_keytab, kerberos_principal=kerberos_principal,
@@ -456,7 +463,7 @@ class BaseAlert(object):
       # get the host for dfs.namenode.http-address.c1ha.nn1 and see if it's
       # this host
       value = self._get_configuration_value(key)
-      if value is not None and (self.host_name in value or self.public_host_name in value):
+      if value is not None and (self.host_name.lower() in value.lower() or self.public_host_name.lower() in value.lower()):
         return AlertUri(uri=value, is_ssl_enabled=is_ssl_enabled)
 
     return None
@@ -504,48 +511,3 @@ class BaseAlert(object):
     :return:  the parameterized text
     '''
     return '{0}'
-
-  """
-  See RFC3986, Appendix B
-  Tested on the following cases:
-    "192.168.54.1"
-    "192.168.54.2:7661
-    "hdfs://192.168.54.3/foo/bar"
-    "ftp://192.168.54.4:7842/foo/bar"
-
-    Returns None if only a port is passed in
-  """
-  @staticmethod
-  def get_host_from_url(uri):
-    if uri is None:
-      return None
-    
-    # if not a string, return None
-    if not isinstance(uri, basestring):
-      return None    
-        
-    # RFC3986, Appendix B
-    parts = re.findall('^(([^:/?#]+):)?(//([^/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?', uri)
-
-    # index of parts
-    # scheme    = 1
-    # authority = 3
-    # path      = 4
-    # query     = 6
-    # fragment  = 8
-
-    host_and_port = uri
-    if 0 == len(parts[0][1]):
-      host_and_port = parts[0][4]
-    elif 0 == len(parts[0][2]):
-      host_and_port = parts[0][1]
-    elif parts[0][2].startswith("//"):
-      host_and_port = parts[0][3]
-
-    if -1 == host_and_port.find(':'):
-      if host_and_port.isdigit():
-        return None    
-      
-      return host_and_port
-    else:
-      return host_and_port.split(':')[0]

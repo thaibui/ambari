@@ -1994,6 +1994,8 @@ describe('App.MainHostDetailsController', function () {
       zkServerInstalled: false,
       lastComponents: [],
       masterComponents: [],
+      nonAddableMasterComponents: [],
+      lastMasterComponents: [],
       runningComponents: [],
       nonDeletableComponents: [],
       unknownComponents: [],
@@ -2118,82 +2120,103 @@ describe('App.MainHostDetailsController', function () {
       controller.confirmDeleteHost.restore();
     });
 
-    it('masterComponents exist', function () {
-      controller.set('mockHostComponentsInfo', {
-        masterComponents: [
-          {}
-        ]
-      });
-      controller.validateAndDeleteHost();
-      expect(controller.raiseDeleteComponentsError.calledWith({masterComponents: [
-        {}
-      ]}, 'masterList')).to.be.true;
-    });
     it('nonDeletableComponents exist', function () {
       controller.set('mockHostComponentsInfo', {
-        masterComponents: [],
         nonDeletableComponents: [
           {}
         ]
       });
       controller.validateAndDeleteHost();
       expect(controller.raiseDeleteComponentsError.calledWith({
-        masterComponents: [],
         nonDeletableComponents: [
           {}
         ]
       }, 'nonDeletableList')).to.be.true;
     });
+    it('nonAddableMasterComponents exist', function () {
+      controller.set('mockHostComponentsInfo', {
+        nonDeletableComponents: [],
+        nonAddableMasterComponents: [
+        {}
+        ]
+      });
+      controller.validateAndDeleteHost();
+      expect(controller.raiseDeleteComponentsError.calledWith({
+        nonDeletableComponents: [],
+        nonAddableMasterComponents: [
+          {}
+        ]
+      }, 'masterList')).to.be.true;
+    });
     it('runningComponents exist', function () {
       controller.set('mockHostComponentsInfo', {
-        masterComponents: [],
+        nonAddableMasterComponents: [],
         nonDeletableComponents: [],
         runningComponents: [{}]
       });
       controller.validateAndDeleteHost();
       expect(controller.raiseDeleteComponentsError.calledWith({
-        masterComponents: [],
+        nonAddableMasterComponents: [],
         nonDeletableComponents: [],
         runningComponents: [{}]
       }, 'runningList')).to.be.true;
     });
+    it('lastMasterComponents exist', function () {
+      controller.set('mockHostComponentsInfo', {
+        nonAddableMasterComponents: [],
+        nonDeletableComponents: [],
+        runningComponents: [],
+        lastMasterComponents: [{}]
+      });
+      controller.validateAndDeleteHost();
+      expect(controller.raiseDeleteComponentsError.calledWith({
+        nonAddableMasterComponents: [],
+        nonDeletableComponents: [],
+        runningComponents: [],
+        lastMasterComponents: [{}]
+      }, 'lastMasterList')).to.be.true;
+    });
     it('zkServerInstalled = true', function () {
       controller.set('mockHostComponentsInfo', {
-        masterComponents: [],
+        nonAddableMasterComponents: [],
         nonDeletableComponents: [],
         runningComponents: [],
         unknownComponents: [],
         lastComponents: [],
+        lastMasterComponents: [],
         zkServerInstalled: true
       });
       var popup = controller.validateAndDeleteHost();
       expect(App.showConfirmationPopup.calledOnce).to.be.true;
       popup.onPrimary();
       expect(controller.confirmDeleteHost.calledWith({
-        masterComponents: [],
+        nonAddableMasterComponents: [],
         nonDeletableComponents: [],
         runningComponents: [],
         unknownComponents: [],
         lastComponents: [],
+        lastMasterComponents: [],
         zkServerInstalled: true
       })).to.be.true;
     });
     it('zkServerInstalled = false', function () {
       controller.set('mockHostComponentsInfo', {
-        masterComponents: [],
+        nonAddableMasterComponents: [],
         nonDeletableComponents: [],
         runningComponents: [],
         unknownComponents: [],
         lastComponents: [],
+        lastMasterComponents: [],
         zkServerInstalled: false
       });
       controller.validateAndDeleteHost();
       expect(controller.confirmDeleteHost.calledWith({
-        masterComponents: [],
+        nonAddableMasterComponents: [],
         nonDeletableComponents: [],
         runningComponents: [],
         unknownComponents: [],
         lastComponents: [],
+        lastMasterComponents: [],
         zkServerInstalled: false
       })).to.be.true;
     });
@@ -3543,30 +3566,43 @@ describe('App.MainHostDetailsController', function () {
 
     it("no dependencies", function () {
       var opt = {scope: '*'};
-      this.mock.returns(Em.Object.create({
-        dependencies: []
+      this.mock.withArgs('C1').returns(App.StackServiceComponent.createRecord({
+          'dependencies': []
       }));
       expect(controller.checkComponentDependencies('C1', opt)).to.be.empty;
     });
     it("dependecies already installed", function () {
       var opt = {scope: '*', installedComponents: ['C2']};
-      this.mock.returns(Em.Object.create({
+      this.mock.withArgs('C1').returns(App.StackServiceComponent.createRecord({
         dependencies: [{componentName: 'C2'}]
       }));
+      this.mock.withArgs('C2').returns(App.StackServiceComponent.createRecord({ componentName: 'C2' }));
       expect(controller.checkComponentDependencies('C1', opt)).to.be.empty;
     });
     it("dependecies should be added", function () {
       var opt = {scope: '*', installedComponents: ['C2']};
-      this.mock.returns(Em.Object.create({
+      this.mock.withArgs('C1').returns(App.StackServiceComponent.createRecord({
         dependencies: [{componentName: 'C3'}]
       }));
+      this.mock.withArgs('C2').returns(App.StackServiceComponent.createRecord({ componentName: 'C2' }));
+      this.mock.withArgs('C3').returns(App.StackServiceComponent.createRecord({ componentName: 'C3' }));
       expect(controller.checkComponentDependencies('C1', opt)).to.eql(['C3']);
+    });
+    it("dependecies already installed by component type", function () {
+      var opt = {scope: '*', installedComponents: ['C3']};
+      this.mock.withArgs('C1').returns(App.StackServiceComponent.createRecord({
+        dependencies: [{componentName: 'C2'}]
+      }));
+      this.mock.withArgs('C2').returns(App.StackServiceComponent.createRecord({ componentName: 'C2', componentType: 'HCFS_CLIENT' }));
+      this.mock.withArgs('C3').returns(App.StackServiceComponent.createRecord({ componentName: 'C3', componentType: 'HCFS_CLIENT' }));
+      expect(controller.checkComponentDependencies('C1', opt)).to.be.empty;
     });
     it("scope is host", function () {
       var opt = {scope: 'host', hostName: 'host1'};
-      this.mock.returns(Em.Object.create({
+      this.mock.withArgs('C1').returns(App.StackServiceComponent.createRecord({
         dependencies: [{componentName: 'C3', scope: 'host'}]
       }));
+      this.mock.withArgs('C3').returns(App.StackServiceComponent.createRecord({ componentName: 'C3' }));
       expect(controller.checkComponentDependencies('C1', opt)).to.eql(['C3']);
     });
   });

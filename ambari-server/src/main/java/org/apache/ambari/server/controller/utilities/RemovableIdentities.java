@@ -58,7 +58,7 @@ public class RemovableIdentities {
     if (cluster.getSecurityType() != SecurityType.KERBEROS) {
       return RemovableIdentities.none();
     }
-    KerberosServiceDescriptor serviceDescriptor = kerberosHelper.getKerberosDescriptor(cluster).getService(event.getServiceName());
+    KerberosServiceDescriptor serviceDescriptor = kerberosHelper.getKerberosDescriptor(cluster, false).getService(event.getServiceName());
     if (serviceDescriptor == null) {
       return RemovableIdentities.none();
     }
@@ -77,7 +77,7 @@ public class RemovableIdentities {
     if (cluster.getSecurityType() != SecurityType.KERBEROS) {
       return RemovableIdentities.none();
     }
-    KerberosServiceDescriptor serviceDescriptor = kerberosHelper.getKerberosDescriptor(cluster).getService(event.getServiceName());
+    KerberosServiceDescriptor serviceDescriptor = kerberosHelper.getKerberosDescriptor(cluster, false).getService(event.getServiceName());
     if (serviceDescriptor == null) {
       return RemovableIdentities.none();
     }
@@ -133,7 +133,7 @@ public class RemovableIdentities {
    * Remove all identities which are not used by other services or components
    */
   public void remove(KerberosHelper kerberosHelper) throws AmbariException, KerberosOperationException {
-    Set<String> identitiesToRemove = skipUsed().stream().map(KerberosIdentityDescriptor::getName).collect(toSet());
+    Set<String> identitiesToRemove = skipUsed().stream().map(KerberosIdentityDescriptor::getPath).collect(toSet());
     if (!identitiesToRemove.isEmpty()) {
       kerberosHelper.deleteIdentities(cluster, components, identitiesToRemove);
     }

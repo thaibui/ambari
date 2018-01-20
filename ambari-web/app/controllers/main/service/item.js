@@ -148,6 +148,10 @@ App.MainServiceItemController = Em.Controller.extend(App.SupportClientConfigsDow
       App.StackService.find(this.get('content.serviceName')).get('dependentServiceNames') : [];
   }.property('content.serviceName', 'App.router.clusterController.isConfigsPropertiesLoaded'),
 
+  configDependentServiceNames: function() {
+    return this.get('dependentServiceNames').concat(App.StackService.find(this.get('content.serviceName')).get('requiredServices'))
+  }.property('dependentServiceNames'),
+
   /**
    * List of service names that could be deleted
    * Common case when there is only current service should be removed
@@ -171,7 +175,7 @@ App.MainServiceItemController = Em.Controller.extend(App.SupportClientConfigsDow
    * @type {String[]}
    */
   sitesToLoad: function() {
-    var services = this.get('dependentServiceNames'), configTypeList = [];
+    var services = this.get('configDependentServiceNames'), configTypeList = [];
     if (services.length) {
       configTypeList = App.StackService.find().filter(function(s) {
         return services.contains(s.get('serviceName'));
@@ -225,12 +229,14 @@ App.MainServiceItemController = Em.Controller.extend(App.SupportClientConfigsDow
           allConfigs = allConfigs.concat(App.config.getConfigsFromJSON(site, true));
         });
 
-        self.get('dependentServiceNames').forEach(function(serviceName) {
+        self.get('configDependentServiceNames').forEach(function(serviceName) {
           var configTypes = App.StackService.find(serviceName).get('configTypeList');
           var configsByService = allConfigs.filter(function (c) {
             return configTypes.contains(App.config.getConfigTagFromFileName(c.get('filename')));
           });
-          self.get('stepConfigs').pushObject(App.config.createServiceConfig(serviceName, [], configsByService));
+          if (App.config.get('preDefinedServiceConfigs').someProperty('serviceName', serviceName)) {
+            self.get('stepConfigs').pushObject(App.config.createServiceConfig(serviceName, [], configsByService));
+          }
         });
 
         self.set('isServiceConfigsLoaded', true);
@@ -336,7 +342,7 @@ App.MainServiceItemController = Em.Controller.extend(App.SupportClientConfigsDow
         // not available
         return App.showConfirmationPopup(
           callback, Em.I18n.t('services.service.stop.HDFS.warningMsg.checkPointNA'), null,
-          Em.I18n.t('common.warning'), Em.I18n.t('common.proceedAnyway'), true
+          Em.I18n.t('common.warning'), Em.I18n.t('common.proceedAnyway'), 'danger'
         );
       } else {
         // still young
@@ -652,7 +658,7 @@ App.MainServiceItemController = Em.Controller.extend(App.SupportClientConfigsDow
     var batches = [{
       "order_id": 1,
       "type": "POST",
-      "uri": App.apiPrefix + "/clusters/" + App.get('clusterName') + "/requests",
+      "uri": "/clusters/" + App.get('clusterName') + "/requests",
       "RequestBodyInfo": {
         "RequestInfo": {
           "context": "Refresh YARN Capacity Scheduler",
@@ -668,7 +674,7 @@ App.MainServiceItemController = Em.Controller.extend(App.SupportClientConfigsDow
     }, {
       "order_id": 2,
       "type": "POST",
-      "uri": App.apiPrefix + "/clusters/" + App.get('clusterName') + "/requests",
+      "uri": "/clusters/" + App.get('clusterName') + "/requests",
       "RequestBodyInfo": {
         "RequestInfo": {"context": "Restart LLAP", "command": "RESTART_LLAP"},
         "Requests/resource_filters": [{
@@ -774,6 +780,31 @@ App.MainServiceItemController = Em.Controller.extend(App.SupportClientConfigsDow
     App.showAlertPopup(Em.I18n.t('services.service.actions.run.rebalanceHdfsNodes.error'), error);
   },
 
+  regenerateKeytabFileOperations: function () {
+    var self = this;
+    var serviceName = this.content.get('serviceName');
+    var clusterName = App.get('clusterName');
+    return App.showConfirmationPopup(function() {
+      return App.ajax.send({
+        name: "admin.kerberos_security.regenerate_keytabs.service",
+        sender: self,
+        data: {
+          clusterName: clusterName,
+          serviceName: serviceName
+        },
+        success: 'regenerateKeytabFileOperationsRequestSuccess',
+        error: 'regenerateKeytabFileOperationsRequestError'
+      });
+    }, Em.I18n.t('question.sure.regenerateKeytab.service').format(serviceName));
+  },
+
+  regenerateKeytabFileOperationsRequestSuccess: function(){
+    App.router.get('backgroundOperationsController').showPopup();
+  },
+
+  regenerateKeytabFileOperationsRequestError: function () {
+    App.showAlertPopup(Em.I18n.t('common.error'), Em.I18n.t('alerts.notifications.regenerateKeytab.service.error').format(this.content.get('serviceName')));
+  },
   /**
    * On click callback for <code>run compaction</code> button
    * @param event
@@ -984,10 +1015,19 @@ App.MainServiceItemController = Em.Controller.extend(App.SupportClientConfigsDow
     }
   }.observes('App.router.backgroundOperationsController.serviceTimestamp'),
 
+  nonClientServiceComponents: function () {
+    return App.MasterComponent.find().toArray().concat(App.SlaveComponent.find().toArray()).filterProperty('service.serviceName', this.get('content.serviceName'));
+  }.property('content.serviceName'),
+
   isStartDisabled: function () {
     if(this.get('isPending')) return true;
-    return !(this.get('content.healthStatus') == 'red');
-  }.property('content.healthStatus','isPending'),
+
+    var isDisabled = true;
+    this.get('nonClientServiceComponents').forEach(function(component) {
+      isDisabled = isDisabled ? !(component.get('installedAndMaintenanceOffCount') > 0) : false;
+    });
+    return isDisabled;
+  }.property('isPending', 'nonClientServiceComponents'),
 
   isStopDisabled: function () {
     if(this.get('isPending')) return true;
@@ -1234,7 +1274,7 @@ App.MainServiceItemController = Em.Controller.extend(App.SupportClientConfigsDow
             null,
             popupHeader,
             Em.I18n.t('common.delete'),
-            true
+            'danger'
           );
         } else {
           this.showLastWarning(serviceName, interDependentServices, dependentServicesToDeleteFmt);
@@ -1489,7 +1529,7 @@ App.MainServiceItemController = Em.Controller.extend(App.SupportClientConfigsDow
    * @return {Boolean}
    * @override
    */
-  allowUpdateProperty: function (parentProperties, name, fileName) {
+  allowUpdateProperty: function (parentProperties, name, fileName, configGroup, savedValue) {
     var stackProperty = App.configsCollection.getConfigByName(name, fileName);
     if (!stackProperty || (stackProperty.serviceName === this.get('content.serviceName'))) {
       /**
@@ -1502,12 +1542,12 @@ App.MainServiceItemController = Em.Controller.extend(App.SupportClientConfigsDow
       /**
        * update properties that depends on current service
        */
-      return !!stackProperty.propertyDependsOn.filter(function (p) {
+      return stackProperty.propertyDependsOn.some(function (p) {
         var service = App.config.get('serviceByConfigTypeMap')[p.type];
         return service && (this.get('content.serviceName') === service.get('serviceName'));
-      }, this).length;
+      }, this);
     }
-    return false;
+    return !Em.isNone(savedValue) && stackProperty.recommendedValue === savedValue;
   },
 
   /**

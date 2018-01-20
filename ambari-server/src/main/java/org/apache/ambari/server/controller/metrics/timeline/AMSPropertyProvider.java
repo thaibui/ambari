@@ -66,10 +66,13 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.metrics2.sink.timeline.TimelineMetric;
 import org.apache.hadoop.metrics2.sink.timeline.TimelineMetrics;
 import org.apache.http.client.utils.URIBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.Sets;
 
 public abstract class AMSPropertyProvider extends MetricsPropertyProvider {
+  private static final Logger LOG = LoggerFactory.getLogger(AMSPropertyProvider.class);
   private static final String METRIC_REGEXP_PATTERN = "\\([^)]*\\)";
   private static final int COLLECTOR_DEFAULT_PORT = 6188;
   private final TimelineMetricCache metricCache;
@@ -279,7 +282,7 @@ public abstract class AMSPropertyProvider extends MetricsPropertyProvider {
                       && checkMetricName(patterns, metric.getMetricName())) {
                 String hostnameTmp = metric.getHostName();
                 if (!metricsMap.containsKey(hostnameTmp)) {
-                  metricsMap.put(hostnameTmp, new HashSet<TimelineMetric>());
+                  metricsMap.put(hostnameTmp, new HashSet<>());
                 }
                 metricsMap.get(hostnameTmp).add(metric);
               }

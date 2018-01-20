@@ -227,8 +227,7 @@ public class OrmTestHelper {
     PasswordEncoder encoder = injector.getInstance(PasswordEncoder.class);
 
     UserEntity admin = new UserEntity();
-    admin.setUserName(UserName.fromString("administrator"));
-    admin.setUserPassword(encoder.encode("admin"));
+    admin.setUserName(UserName.fromString("administrator").toString());
     admin.setPrincipal(principalEntity);
 
     Set<UserEntity> users = new HashSet<>();
@@ -242,11 +241,9 @@ public class OrmTestHelper {
     getEntityManager().persist(principalEntity);
 
     UserEntity userWithoutRoles = new UserEntity();
-    userWithoutRoles.setUserName(UserName.fromString("userWithoutRoles"));
-    userWithoutRoles.setUserPassword(encoder.encode("test"));
+    userWithoutRoles.setUserName(UserName.fromString("userWithoutRoles").toString());
     userWithoutRoles.setPrincipal(principalEntity);
     userDAO.create(userWithoutRoles);
-
   }
 
   @Transactional
@@ -299,7 +296,7 @@ public class OrmTestHelper {
     commandEntity2.setStage(stageEntity);
     commandEntity3.setStage(stageEntity);
 
-    stageEntity.setHostRoleCommands(new ArrayList<HostRoleCommandEntity>());
+    stageEntity.setHostRoleCommands(new ArrayList<>());
     stageEntity.getHostRoleCommands().add(commandEntity);
     stageEntity.getHostRoleCommands().add(commandEntity2);
     stageEntity.getHostRoleCommands().add(commandEntity3);
@@ -670,11 +667,16 @@ public class OrmTestHelper {
 
     if (repositoryVersion == null) {
       try {
+        String operatingSystems = "[{\"OperatingSystems/ambari_managed_repositories\":\"true\",\"repositories\":[{\"Repositories/repo_id\":\"HDP\",\"Repositories/base_url\":\"\",\"Repositories/repo_name\":\"HDP\"},{\"Repositories/repo_id\":\"HDP-UTILS\",\"Repositories/base_url\":\"\",\"Repositories/repo_name\":\"HDP-UTILS\"}],\"OperatingSystems/os_type\":\"redhat6\"}]";
+
         repositoryVersion = repositoryVersionDAO.create(stackEntity, version,
-            String.valueOf(System.currentTimeMillis()) + uniqueCounter.incrementAndGet(), "");
+            String.valueOf(System.currentTimeMillis()) + uniqueCounter.incrementAndGet(), operatingSystems);
+
+        repositoryVersion.setResolved(true);
+        repositoryVersion = repositoryVersionDAO.merge(repositoryVersion);
       } catch (Exception ex) {
         LOG.error("Caught exception", ex);
-        ex.printStackTrace();
+
         Assert.fail(MessageFormat.format("Unable to create Repo Version for Stack {0} and version {1}",
             stackEntity.getStackName() + "-" + stackEntity.getStackVersion(), version));
       }

@@ -33,7 +33,6 @@ import java.util.Map;
 import java.util.Set;
 
 import org.apache.ambari.server.controller.AmbariManagementController;
-import org.apache.ambari.server.controller.MemberResponse;
 import org.apache.ambari.server.controller.RequestStatusResponse;
 import org.apache.ambari.server.controller.ResourceProviderFactory;
 import org.apache.ambari.server.controller.spi.Predicate;
@@ -44,7 +43,6 @@ import org.apache.ambari.server.controller.utilities.PredicateBuilder;
 import org.apache.ambari.server.controller.utilities.PropertyHelper;
 import org.apache.ambari.server.security.TestAuthenticationFactory;
 import org.apache.ambari.server.security.authorization.AuthorizationException;
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 import org.springframework.security.core.Authentication;
@@ -79,8 +77,8 @@ public class MemberResourceProviderTest {
 
     AbstractControllerResourceProvider.init(resourceProviderFactory);
 
-    expect(resourceProviderFactory.getMemberResourceProvider(EasyMock.<Set<String>>anyObject(), EasyMock.<Map<Resource.Type, String>>anyObject(), eq(managementController)))
-        .andReturn(new MemberResourceProvider(PropertyHelper.getPropertyIds(type), PropertyHelper.getKeyPropertyIds(type), managementController)).anyTimes();
+    expect(resourceProviderFactory.getMemberResourceProvider(eq(managementController)))
+        .andReturn(new MemberResourceProvider(managementController)).anyTimes();
 
     managementController.createMembers(AbstractResourceProviderTest.Matcher.getMemberRequestSet("engineering", "joe"));
     expectLastCall().atLeastOnce();
@@ -92,8 +90,6 @@ public class MemberResourceProviderTest {
 
     ResourceProvider provider = AbstractControllerResourceProvider.getResourceProvider(
         type,
-        PropertyHelper.getPropertyIds(type),
-        PropertyHelper.getKeyPropertyIds(type),
         managementController);
 
     // add the property map to a set for the request.  add more maps for multiple creates
@@ -135,11 +131,11 @@ public class MemberResourceProviderTest {
 
     AbstractControllerResourceProvider.init(resourceProviderFactory);
 
-    expect(resourceProviderFactory.getMemberResourceProvider(EasyMock.<Set<String>>anyObject(), EasyMock.<Map<Resource.Type, String>>anyObject(), eq(managementController)))
-        .andReturn(new MemberResourceProvider(PropertyHelper.getPropertyIds(type), PropertyHelper.getKeyPropertyIds(type), managementController)).anyTimes();
+    expect(resourceProviderFactory.getMemberResourceProvider(eq(managementController)))
+        .andReturn(new MemberResourceProvider(managementController)).anyTimes();
 
     expect(managementController.getMembers(AbstractResourceProviderTest.Matcher.getMemberRequestSet(null, null)))
-        .andReturn(Collections.<MemberResponse>emptySet())
+        .andReturn(Collections.emptySet())
         .atLeastOnce();
 
     // replay
@@ -149,8 +145,6 @@ public class MemberResourceProviderTest {
 
     ResourceProvider provider = AbstractControllerResourceProvider.getResourceProvider(
         type,
-        PropertyHelper.getPropertyIds(type),
-        PropertyHelper.getKeyPropertyIds(type),
         managementController);
 
     // create the request
@@ -184,8 +178,8 @@ public class MemberResourceProviderTest {
     AbstractControllerResourceProvider.init(resourceProviderFactory);
 
     // set expectations
-    expect(resourceProviderFactory.getMemberResourceProvider(EasyMock.<Set<String>>anyObject(), EasyMock.<Map<Resource.Type, String>>anyObject(), eq(managementController)))
-        .andReturn(new MemberResourceProvider(PropertyHelper.getPropertyIds(type), PropertyHelper.getKeyPropertyIds(type), managementController)).anyTimes();
+    expect(resourceProviderFactory.getMemberResourceProvider(eq(managementController)))
+        .andReturn(new MemberResourceProvider(managementController)).anyTimes();
 
     managementController.updateMembers(AbstractResourceProviderTest.Matcher.getMemberRequestSet("engineering", "joe"));
     expectLastCall().atLeastOnce();
@@ -197,8 +191,6 @@ public class MemberResourceProviderTest {
 
     ResourceProvider provider = AbstractControllerResourceProvider.getResourceProvider(
         type,
-        PropertyHelper.getPropertyIds(type),
-        PropertyHelper.getKeyPropertyIds(type),
         managementController);
 
     // add the property map to a set for the request.
@@ -239,8 +231,8 @@ public class MemberResourceProviderTest {
     AbstractControllerResourceProvider.init(resourceProviderFactory);
 
     // set expectations
-    expect(resourceProviderFactory.getMemberResourceProvider(EasyMock.<Set<String>>anyObject(), EasyMock.<Map<Resource.Type, String>>anyObject(), eq(managementController)))
-        .andReturn(new MemberResourceProvider(PropertyHelper.getPropertyIds(type), PropertyHelper.getKeyPropertyIds(type), managementController)).anyTimes();
+    expect(resourceProviderFactory.getMemberResourceProvider(eq(managementController)))
+        .andReturn(new MemberResourceProvider(managementController)).anyTimes();
 
     managementController.deleteMembers(AbstractResourceProviderTest.Matcher.getMemberRequestSet("engineering", null));
     expectLastCall().atLeastOnce();
@@ -252,8 +244,6 @@ public class MemberResourceProviderTest {
 
     ResourceProvider provider = AbstractControllerResourceProvider.getResourceProvider(
         type,
-        PropertyHelper.getPropertyIds(type),
-        PropertyHelper.getKeyPropertyIds(type),
         managementController);
 
     PredicateBuilder builder = new PredicateBuilder();

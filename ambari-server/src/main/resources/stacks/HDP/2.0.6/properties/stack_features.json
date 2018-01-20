@@ -104,12 +104,6 @@
         "min_version": "2.2.0.0"
       },
       {
-        "name": "create_kafka_broker_id",
-        "description": "Ambari should create Kafka Broker Id (AMBARI-12678)",
-        "min_version": "2.2.0.0",
-        "max_version": "2.3.0.0"
-      },
-      {
         "name": "kafka_listeners",
         "description": "Kafka listeners (AMBARI-10984)",
         "min_version": "2.3.0.0"
@@ -423,6 +417,47 @@
         "name": "nifi_jaas_conf_create",
         "description": "Create NIFI jaas configuration when kerberos is enabled",
         "min_version": "2.6.0.0"
+      },
+      {
+        "name": "atlas_core_site_support",
+        "description": "Need to create core-site under Atlas conf directory.",
+        "min_version": "2.6.0.0"
+      },
+      {
+        "name": "hadoop_custom_extensions",
+        "description": "Support hadoop custom extensions",
+        "min_version": "2.6.0.0"
+      },
+      {
+        "name": "registry_remove_rootpath",
+        "description": "Registry remove root path setting",
+        "min_version": "2.6.3.0"
+      },
+      {
+        "name": "registry_allowed_resources_support",
+        "description": "Registry allowed resources",
+        "min_version": "2.6.3.0"
+      },
+      {
+        "name": "registry_rewriteuri_filter_support",
+        "description": "Registry RewriteUri servlet filter",
+        "min_version": "2.6.3.0"
+      },
+      {
+        "name": "sam_storage_core_in_registry",
+        "description": "Storage core module moved to registry",
+        "min_version": "2.6.3.0"
+      },
+      {
+        "name": "kafka_extended_sasl_support",
+        "description": "Support SASL PLAIN and GSSAPI",
+        "min_version": "2.6.5.0"
+      },
+      {
+        "name": "oozie_extjs_included",
+        "description": "ExtJS is included in the repository and automatically installed by Ambari",
+        "min_version": "2.2.0.0",
+        "max_version": "2.6.0.0"
       }
     ]
   }

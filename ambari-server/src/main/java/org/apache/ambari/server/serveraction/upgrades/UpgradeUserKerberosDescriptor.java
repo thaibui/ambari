@@ -32,7 +32,6 @@ import org.apache.ambari.server.api.services.AmbariMetaInfo;
 import org.apache.ambari.server.orm.dao.ArtifactDAO;
 import org.apache.ambari.server.orm.entities.ArtifactEntity;
 import org.apache.ambari.server.state.Cluster;
-import org.apache.ambari.server.state.Clusters;
 import org.apache.ambari.server.state.StackId;
 import org.apache.ambari.server.state.UpgradeContext;
 import org.apache.ambari.server.state.kerberos.KerberosDescriptor;
@@ -60,9 +59,6 @@ public class UpgradeUserKerberosDescriptor extends AbstractUpgradeServerAction {
   private ArtifactDAO artifactDAO;
 
   @Inject
-  private Clusters clusters;
-
-  @Inject
   private AmbariMetaInfo ambariMetaInfo;
 
   @Inject
@@ -81,7 +77,7 @@ public class UpgradeUserKerberosDescriptor extends AbstractUpgradeServerAction {
       throws AmbariException, InterruptedException {
     HostRoleCommand hostRoleCommand = getHostRoleCommand();
     String clusterName = hostRoleCommand.getExecutionCommandWrapper().getExecutionCommand().getClusterName();
-    Cluster cluster = clusters.getCluster(clusterName);
+    Cluster cluster = getClusters().getCluster(clusterName);
     List<String> messages = new ArrayList<>();
     List<String> errorMessages = new ArrayList<>();
 
@@ -116,7 +112,7 @@ public class UpgradeUserKerberosDescriptor extends AbstractUpgradeServerAction {
           logErrorMessage(messages, errorMessages, "The new stack version information was not found.");
         } else {
           logMessage(messages, String.format("Obtaining new stack Kerberos descriptor for %s.", targetStackId.toString()));
-          newDescriptor = ambariMetaInfo.getKerberosDescriptor(targetStackId.getStackName(), targetStackId.getStackVersion());
+          newDescriptor = ambariMetaInfo.getKerberosDescriptor(targetStackId.getStackName(), targetStackId.getStackVersion(), false);
 
           if (newDescriptor == null) {
             logErrorMessage(messages, errorMessages, String.format("The Kerberos descriptor for the new stack version, %s, was not found.", targetStackId.toString()));
@@ -127,7 +123,7 @@ public class UpgradeUserKerberosDescriptor extends AbstractUpgradeServerAction {
           logErrorMessage(messages, errorMessages, "The previous stack version information was not found.");
         } else {
           logMessage(messages, String.format("Obtaining previous stack Kerberos descriptor for %s.", originalStackId.toString()));
-          previousDescriptor = ambariMetaInfo.getKerberosDescriptor(originalStackId.getStackName(), originalStackId.getStackVersion());
+          previousDescriptor = ambariMetaInfo.getKerberosDescriptor(originalStackId.getStackName(), originalStackId.getStackVersion(), false);
 
           if (newDescriptor == null) {
             logErrorMessage(messages, errorMessages, String.format("The Kerberos descriptor for the previous stack version, %s, was not found.", originalStackId.toString()));

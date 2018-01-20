@@ -64,7 +64,7 @@ public class HiveZKQuorumConfigActionTest {
     EasyMock.expect(m_clusters.getCluster(CLUSTER_NAME)).andReturn(m_cluster).atLeastOnce();
 
     // set the mock objects on the class under test
-    Field m_clusterField = HiveZKQuorumConfigAction.class.getDeclaredField("m_clusters");
+    Field m_clusterField = AbstractUpgradeServerAction.class.getDeclaredField("m_clusters");
     m_clusterField.setAccessible(true);
     m_clusterField.set(m_action, m_clusters);
     m_action.setExecutionCommand(m_executionCommand);
@@ -88,7 +88,7 @@ public class HiveZKQuorumConfigActionTest {
 
     EasyMock.expect(m_hiveSiteConfig.getProperties()).andReturn(hiveSiteProperties).atLeastOnce();
 
-    m_hiveSiteConfig.setProperties(EasyMock.<Map<String, String>>anyObject());
+    m_hiveSiteConfig.setProperties(EasyMock.anyObject());
     EasyMock.expectLastCall().once();
 
     m_hiveSiteConfig.save();

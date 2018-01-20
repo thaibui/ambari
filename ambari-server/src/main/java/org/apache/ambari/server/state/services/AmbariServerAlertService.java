@@ -29,8 +29,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.ambari.server.AmbariService;
 import org.apache.ambari.server.alerts.AlertRunnable;
-import org.apache.ambari.server.controller.RootServiceResponseFactory.Components;
-import org.apache.ambari.server.controller.RootServiceResponseFactory.Services;
+import org.apache.ambari.server.controller.RootComponent;
 import org.apache.ambari.server.orm.dao.AlertDefinitionDAO;
 import org.apache.ambari.server.orm.entities.AlertDefinitionEntity;
 import org.apache.ambari.server.state.Cluster;
@@ -46,6 +45,7 @@ import com.google.common.util.concurrent.AbstractScheduledService;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.google.inject.Provider;
+import com.google.inject.name.Named;
 
 /**
  * The {@link AmbariServerAlertService} is used to manage the dynamically loaded
@@ -88,7 +88,7 @@ public class AmbariServerAlertService extends AbstractScheduledService {
   /**
    * The executor to use to run all {@link Runnable} alert classes.
    */
-  private final ScheduledExecutorService m_scheduledExecutorService = Executors.newScheduledThreadPool(3);
+  private ScheduledExecutorService m_scheduledExecutorService;
 
   /**
    * A map of all of the definition names to {@link ScheduledFuture}s.
@@ -102,6 +102,10 @@ public class AmbariServerAlertService extends AbstractScheduledService {
   public AmbariServerAlertService() {
   }
 
+  @Inject
+  public void initExecutor(@Named("alertServiceCorePoolSize") int alertServiceCorePoolSize) {
+    this.m_scheduledExecutorService = Executors.newScheduledThreadPool(alertServiceCorePoolSize);
+  }
   /**
    * {@inheritDoc}
    */
@@ -113,28 +117,18 @@ public class AmbariServerAlertService extends AbstractScheduledService {
   /**
    * {@inheritDoc}
    * <p/>
-   * Loads all of the {@link Components#AMBARI_SERVER} definitions and schedules
+   * Loads all of the definitions with SERVER source type and schedules
    * the ones that are enabled.
    */
   @Override
   protected void startUp() throws Exception {
     Map<String, Cluster> clusterMap = m_clustersProvider.get().getClusters();
     for (Cluster cluster : clusterMap.values()) {
-      List<AlertDefinitionEntity> entities = m_dao.findByServiceComponent(
-          cluster.getClusterId(), Services.AMBARI.name(),
-          Components.AMBARI_SERVER.name());
-
-      for (AlertDefinitionEntity entity : entities) {
+      for (AlertDefinitionEntity entity : m_dao.findBySourceType(cluster.getClusterId(), SourceType.SERVER)) {
         // don't schedule disabled alert definitions
         if (!entity.getEnabled()) {
           continue;
         }
-
-        SourceType sourceType = entity.getSourceType();
-        if (sourceType != SourceType.SERVER) {
-          continue;
-        }
-
         // schedule the Runnable for the definition
         scheduleRunnable(entity);
       }
@@ -144,7 +138,7 @@ public class AmbariServerAlertService extends AbstractScheduledService {
   /**
    * {@inheritDoc}
    * <p/>
-   * Compares all known {@link Components#AMBARI_SERVER} alerts with those that
+   * Compares all known {@link RootComponent#AMBARI_SERVER} alerts with those that
    * are scheduled. If any are not scheduled or have their intervals changed,
    * then reschedule those.
    */
@@ -152,10 +146,8 @@ public class AmbariServerAlertService extends AbstractScheduledService {
   protected void runOneIteration() throws Exception {
     Map<String, Cluster> clusterMap = m_clustersProvider.get().getClusters();
     for (Cluster cluster : clusterMap.values()) {
-      // get all of the cluster alerts for AMBARI/AMBARI_SERVER
-      List<AlertDefinitionEntity> entities = m_dao.findByServiceComponent(
-          cluster.getClusterId(), Services.AMBARI.name(),
-          Components.AMBARI_SERVER.name());
+      // get all of the cluster alerts with SERVER source type
+      List<AlertDefinitionEntity> entities = m_dao.findBySourceType(cluster.getClusterId(), SourceType.SERVER);
 
       // for each alert, check to see if it's scheduled correctly
       for (AlertDefinitionEntity entity : entities) {

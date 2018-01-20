@@ -28,9 +28,12 @@ import json
 @patch("os.path.exists", new = MagicMock(return_value=True))
 @patch.object(Hook, "run_custom_hook", new = MagicMock())
 class TestHookBeforeStart(RMFTestCase):
+  STACK_VERSION = '2.0.6'
   def test_hook_default(self):
-    self.executeScript("2.0.6/hooks/before-START/scripts/hook.py",
+    self.executeScript("before-START/scripts/hook.py",
                        classname="BeforeStartHook",
+                       stack_version = self.STACK_VERSION,
+                       target=RMFTestCase.TARGET_STACK_HOOKS,
                        command="hook",
                        config_file="default.json"
     )
@@ -92,6 +95,7 @@ class TestHookBeforeStart(RMFTestCase):
     self.assertResourceCalled('File', '/etc/hadoop/conf/topology_mappings.data',
                               owner = 'hdfs',
                               content = Template('topology_mappings.data.j2'),
+                              mode = 0644,
                               group = 'hadoop',
                               only_if = 'test -d /etc/hadoop/conf',
                               )
@@ -103,8 +107,10 @@ class TestHookBeforeStart(RMFTestCase):
     self.assertNoMoreResources()
 
   def test_hook_secured(self):
-    self.executeScript("2.0.6/hooks/before-START/scripts/hook.py",
+    self.executeScript("before-START/scripts/hook.py",
                        classname="BeforeStartHook",
+                       stack_version = self.STACK_VERSION,
+                       target=RMFTestCase.TARGET_STACK_HOOKS,
                        command="hook",
                        config_file="secured.json"
     )
@@ -167,6 +173,7 @@ class TestHookBeforeStart(RMFTestCase):
                               owner = 'hdfs',
                               content = Template('topology_mappings.data.j2'),
                               group = 'hadoop',
+                              mode = 0644,
                               only_if = 'test -d /etc/hadoop/conf',
                               )
     self.assertResourceCalled('File', '/etc/hadoop/conf/topology_script.py',
@@ -182,8 +189,10 @@ class TestHookBeforeStart(RMFTestCase):
       default_json = json.load(f)
 
     default_json['serviceName']= 'HDFS'
-    self.executeScript("2.0.6/hooks/before-START/scripts/hook.py",
+    self.executeScript("before-START/scripts/hook.py",
                        classname="BeforeStartHook",
+                       stack_version = self.STACK_VERSION,
+                       target=RMFTestCase.TARGET_STACK_HOOKS,
                        command="hook",
                        config_dict=default_json
     )
@@ -246,6 +255,7 @@ class TestHookBeforeStart(RMFTestCase):
                               owner = 'hdfs',
                               content = Template('topology_mappings.data.j2'),
                               group = 'hadoop',
+                              mode = 0644,
                               only_if = 'test -d /etc/hadoop/conf',
                               )
     self.assertResourceCalled('File', '/etc/hadoop/conf/topology_script.py',
@@ -256,15 +266,17 @@ class TestHookBeforeStart(RMFTestCase):
     self.assertNoMoreResources()
 
   def test_hook_refresh_topology_custom_directories(self):
-    config_file = "stacks/2.0.6/configs/default.json"
+    config_file = "{0}/test/python/stacks/2.0.6/configs/default.json".format(self.get_src_folder())
     with open(config_file, "r") as f:
       default_json = json.load(f)
 
     default_json['serviceName'] = 'HDFS'
     default_json['configurations']['core-site']['net.topology.script.file.name'] = '/home/myhadoop/hadoop/conf.hadoop/topology_script.py'
 
-    self.executeScript("2.0.6/hooks/before-START/scripts/hook.py",
+    self.executeScript("before-START/scripts/hook.py",
                        classname="BeforeStartHook",
+                       stack_version = self.STACK_VERSION,
+                       target=RMFTestCase.TARGET_STACK_HOOKS,
                        command="hook",
                        config_dict=default_json
     )
@@ -327,6 +339,7 @@ class TestHookBeforeStart(RMFTestCase):
                               owner = 'hdfs',
                               content = Template('topology_mappings.data.j2'),
                               group = 'hadoop',
+                              mode = 0644,
                               only_if = 'test -d /etc/hadoop/conf',
                               )
     self.assertResourceCalled('File', '/etc/hadoop/conf/topology_script.py',
@@ -338,8 +351,10 @@ class TestHookBeforeStart(RMFTestCase):
 
   def test_that_jce_is_required_in_secured_cluster(self):
     try:
-      self.executeScript("2.0.6/hooks/before-START/scripts/hook.py",
+      self.executeScript("before-START/scripts/hook.py",
                          classname="BeforeStartHook",
+                         stack_version = self.STACK_VERSION,
+                         target=RMFTestCase.TARGET_STACK_HOOKS,
                          command="hook",
                          config_file="secured_no_jce_name.json"
       )

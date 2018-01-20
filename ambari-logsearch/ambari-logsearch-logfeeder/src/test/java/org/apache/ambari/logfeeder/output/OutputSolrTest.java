@@ -26,10 +26,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.apache.ambari.logfeeder.conf.LogFeederProps;
+import org.apache.ambari.logfeeder.conf.LogFeederSecurityConfig;
 import org.apache.ambari.logfeeder.input.Input;
 import org.apache.ambari.logfeeder.input.InputMarker;
+import org.apache.ambari.logsearch.config.api.LogSearchConfigLogFeeder;
+import org.apache.ambari.logsearch.config.api.model.outputconfig.OutputSolrProperties;
+import org.apache.ambari.logsearch.config.zookeeper.model.outputconfig.impl.OutputSolrPropertiesImpl;
 import org.apache.log4j.Logger;
-import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.response.UpdateResponse;
 import org.apache.solr.common.SolrInputDocument;
@@ -48,16 +52,22 @@ public class OutputSolrTest {
   private static final Logger LOG = Logger.getLogger(OutputSolrTest.class);
 
   private OutputSolr outputSolr;
+  private LogSearchConfigLogFeeder logSearchConfigMock;
   private Map<Integer, SolrInputDocument> receivedDocs = new ConcurrentHashMap<>();
+  private LogFeederProps logFeederProps = new LogFeederProps();
 
   @Rule
   public ExpectedException expectedException = ExpectedException.none();
 
   @Before
   public void init() throws Exception {
+    LogFeederSecurityConfig logFeederSecurityConfig = new LogFeederSecurityConfig();
+    logFeederSecurityConfig.setSolrKerberosEnabled(false);
+    logFeederProps.setLogFeederSecurityConfig(logFeederSecurityConfig);
     outputSolr = new OutputSolr() {
+      @SuppressWarnings("deprecation")
       @Override
-      SolrClient getSolrClient(String solrUrl, String zkConnectString, int count) throws Exception, MalformedURLException {
+      CloudSolrClient getSolrClient(int count) throws Exception, MalformedURLException {
         return new CloudSolrClient(null) {
           private static final long serialVersionUID = 1L;
 
@@ -74,6 +84,13 @@ public class OutputSolrTest {
         };
       }
     };
+    
+    OutputSolrProperties outputSolrProperties = new OutputSolrPropertiesImpl("hadoop_logs", "none");
+    logSearchConfigMock = EasyMock.createNiceMock(LogSearchConfigLogFeeder.class);
+    EasyMock.expect(logSearchConfigMock.getOutputSolrProperties("service")).andReturn(outputSolrProperties);
+    EasyMock.replay(logSearchConfigMock);
+    
+    outputSolr.setLogSearchConfig(logSearchConfigMock);
   }
 
   @Test
@@ -81,12 +98,12 @@ public class OutputSolrTest {
     LOG.info("testOutputToSolr_uploadData()");
 
     Map<String, Object> config = new HashMap<String, Object>();
-    config.put("url", "some url");
+    config.put("zk_connect_string", "some zk_connect_string");
     config.put("workers", "3");
-    config.put("collection", "some collection");
+    config.put("type", "service");
 
     outputSolr.loadConfig(config);
-    outputSolr.init();
+    outputSolr.init(logFeederProps);
 
     Map<Integer, SolrInputDocument> expectedDocs = new HashMap<>();
 
@@ -138,29 +155,29 @@ public class OutputSolrTest {
         assertNotNull("No received document field found for id: " + id + ", fieldName: " + fieldName, receivedValue);
         assertNotNull("No expected document field found for id: " + id + ", fieldName: " + fieldName, expectedValue);
 
-        assertEquals("Field value not matching for id: " + id + ", fieldName: " + fieldName, receivedValue,
-            expectedValue);
+        assertEquals("Field value not matching for id: " + id + ", fieldName: " + fieldName, receivedValue, expectedValue);
       }
     }
   }
 
   @Test
-  public void testOutputToSolr_noUrlOrZkConnectString() throws Exception {
+  public void testOutputToSolr_noZkConnectString() throws Exception {
     LOG.info("testOutputToSolr_noUrlOrZkConnectString()");
 
     expectedException.expect(Exception.class);
-    expectedException.expectMessage("For solr output, either url or zk_connect_string property need to be set");
+    expectedException.expectMessage("For solr output the zk_connect_string property need to be set");
 
     Map<String, Object> config = new HashMap<String, Object>();
     config.put("workers", "3");
-    config.put("collection", "some collection");
+    config.put("type", "service");
 
     outputSolr.loadConfig(config);
-    outputSolr.init();
+    outputSolr.init(logFeederProps);
   }
 
   @After
   public void cleanUp() {
     receivedDocs.clear();
+    EasyMock.verify(logSearchConfigMock);
   }
 }

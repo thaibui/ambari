@@ -19,28 +19,24 @@ limitations under the License.
 import datanode_upgrade
 from hdfs_datanode import datanode
 from resource_management.libraries.script.script import Script
-from resource_management.libraries.functions import conf_select, stack_select
+from resource_management.libraries.functions import stack_select
 from resource_management.libraries.functions.constants import StackFeature
 from resource_management.libraries.functions.stack_features import check_stack_feature
 from resource_management.libraries.functions.security_commons import build_expectations, \
   cached_kinit_executor, get_params_from_filesystem, validate_security_config_properties, FILE_TYPE_XML
 from resource_management.core.logger import Logger
-from hdfs import hdfs
+from hdfs import hdfs, reconfig
 from ambari_commons.os_family_impl import OsFamilyImpl
 from ambari_commons import OSConst
 from utils import get_hdfs_binary
 
 class DataNode(Script):
 
-  def get_component_name(self):
-    return "hadoop-hdfs-datanode"
-
   def get_hdfs_binary(self):
     """
     Get the name or path to the hdfs binary depending on the component name.
     """
-    component_name = self.get_component_name()
-    return get_hdfs_binary(component_name)
+    return get_hdfs_binary("hadoop-hdfs-datanode")
 
 
   def install(self, env):
@@ -53,6 +49,17 @@ class DataNode(Script):
     env.set_params(params)
     hdfs("datanode")
     datanode(action="configure")
+
+  def save_configs(self, env):
+    import params
+    env.set_params(params)
+    hdfs("datanode")
+
+  def reload_configs(self, env):
+    import params
+    env.set_params(params)
+    Logger.info("RELOAD CONFIGS")
+    reconfig("datanode", params.dfs_dn_ipc_address)
 
   def start(self, env, upgrade_type=None):
     import params
@@ -87,8 +94,7 @@ class DataNodeDefault(DataNode):
     import params
     env.set_params(params)
     if params.version and check_stack_feature(StackFeature.ROLLING_UPGRADE, params.version):
-      conf_select.select(params.stack_name, "hadoop", params.version)
-      stack_select.select("hadoop-hdfs-datanode", params.version)
+      stack_select.select_packages(params.version)
 
   def post_upgrade_restart(self, env, upgrade_type=None):
     Logger.info("Executing DataNode Stack Upgrade post-restart")

@@ -21,9 +21,7 @@ limitations under the License.
 import logging
 import time
 import urllib2
-import ssl
 
-from functools import wraps
 from urllib2 import HTTPError
 
 from tempfile import gettempdir
@@ -33,7 +31,7 @@ from resource_management.libraries.functions.get_port_from_url import get_port_f
 from resource_management.libraries.functions.get_path_from_url import get_path_from_url
 from resource_management.libraries.functions.curl_krb_request import curl_krb_request
 from ambari_commons import OSCheck
-from ambari_commons.inet_utils import resolve_address, ensure_ssl_using_protocol
+from ambari_commons.inet_utils import resolve_address, ensure_ssl_using_protocol, get_host_from_url
 from ambari_agent import Constants
 from ambari_agent.AmbariConfig import AmbariConfig
 
@@ -107,6 +105,10 @@ class WebAlert(BaseAlert):
     if status_code == 0:
       return (self.RESULT_CRITICAL, [status_code, url, time_seconds, error_message])
 
+    # check explicit listed codes
+    if self.uri_property_keys.acceptable_codes and status_code in self.uri_property_keys.acceptable_codes:
+      return (self.RESULT_OK, [status_code, url, time_seconds])
+
     # anything that's less than 400 is OK
     if status_code < 400:
       return (self.RESULT_OK, [status_code, url, time_seconds])
@@ -131,7 +133,7 @@ class WebAlert(BaseAlert):
       uri_path = get_path_from_url(string_uri)
 
     # start building the URL manually
-    host = BaseAlert.get_host_from_url(alert_uri.uri)
+    host = get_host_from_url(alert_uri.uri)
     if host is None:
       host = self.host_name
 

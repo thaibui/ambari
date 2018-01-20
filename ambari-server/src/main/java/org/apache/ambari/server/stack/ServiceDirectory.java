@@ -93,6 +93,11 @@ public abstract class ServiceDirectory extends StackDefinitionDirectory {
   protected File checksDir;
 
   /**
+   * server side action directory path
+   */
+  protected File serverActionsDir;
+
+  /**
    * service metainfo file object representation
    */
   private ServiceMetainfoXml metaInfoXml;
@@ -116,6 +121,11 @@ public abstract class ServiceDirectory extends StackDefinitionDirectory {
    * checks directory name
    */
   protected static final String CHECKS_FOLDER_NAME = "checks";
+
+  /**
+   * Server actions directory name
+   */
+  protected static final String SERVER_ACTIONS_FOLDER_NAME = "server_actions";
 
   /**
    * service metainfo file name
@@ -169,6 +179,15 @@ public abstract class ServiceDirectory extends StackDefinitionDirectory {
    */
   public File getChecksDir() {
     return checksDir;
+  }
+
+  /**
+   * Obtain the server side actions directory path.
+   *
+   * @return server side actions directory path
+   */
+  public File getServerActionsDir() {
+    return serverActionsDir;
   }
 
   /**
@@ -257,13 +276,13 @@ public abstract class ServiceDirectory extends StackDefinitionDirectory {
     calculateDirectories(getStack(), getService());
     parseMetaInfoFile();
 
-    File af = new File(directory, AmbariMetaInfo.SERVICE_ALERT_FILE_NAME);
+    File af = new File(directory, StackDirectory.SERVICE_ALERT_FILE_NAME);
     alertsFile = af.exists() ? af : null;
 
     File kdf = new File(directory, AmbariMetaInfo.KERBEROS_DESCRIPTOR_FILE_NAME);
     kerberosDescriptorFile = kdf.exists() ? kdf : null;
 
-    File rco = new File(directory, AmbariMetaInfo.RCO_FILE_NAME);
+    File rco = new File(directory, StackDirectory.RCO_FILE_NAME);
     if (rco.exists()) {
       rcoFile = rco;
       parseRoleCommandOrder();
@@ -279,13 +298,10 @@ public abstract class ServiceDirectory extends StackDefinitionDirectory {
       }
     }
 
-    File advFile = new File(directory, AmbariMetaInfo.SERVICE_ADVISOR_FILE_NAME);
+    File advFile = new File(directory, StackDirectory.SERVICE_ADVISOR_FILE_NAME);
     advisorFile = advFile.exists() ? advFile : null;
 
-    File themeFile = new File(directory, AmbariMetaInfo.SERVICE_THEME_FILE_NAME);
-    this.themeFile = themeFile.exists() ? themeFile : null;
-
-    File checksFile = new File(directory, AmbariMetaInfo.SERVICE_THEME_FILE_NAME);
+    File themeFile = new File(directory, StackDirectory.SERVICE_THEME_FILE_NAME);
     this.themeFile = themeFile.exists() ? themeFile : null;
   }
 
@@ -306,6 +322,7 @@ public abstract class ServiceDirectory extends StackDefinitionDirectory {
 	  calculatePackageDirectory(stack, service);
 	  calculateUpgradesDirectory(stack, service);
 	  calculateChecksDirectory(stack, service);
+	  calculateServerActionsDirectory(stack, service);
   }
 
   /**
@@ -378,6 +395,15 @@ public abstract class ServiceDirectory extends StackDefinitionDirectory {
    */
   protected void calculateChecksDirectory(String stack, String service) {
     checksDir = resolveDirectory(CHECKS_FOLDER_NAME, stack, service);
+  }
+
+  /**
+   * Sets the serverActionsDir if the dir exists and is not empty
+   * @param stack
+   * @param service
+   */
+  protected void calculateServerActionsDirectory(String stack, String service) {
+    serverActionsDir = resolveDirectory(SERVER_ACTIONS_FOLDER_NAME, stack, service);
   }
 
   /**

@@ -74,7 +74,7 @@ public class OperatingSystemResourceProvider extends ReadOnlyResourceProvider {
   };
 
   protected OperatingSystemResourceProvider(AmbariManagementController managementController) {
-    super(propertyIds, keyPropertyIds, managementController);
+    super(Resource.Type.OperatingSystem, propertyIds, keyPropertyIds, managementController);
   }
 
   @Override
@@ -85,7 +85,7 @@ public class OperatingSystemResourceProvider extends ReadOnlyResourceProvider {
     final Set<OperatingSystemRequest> requests = new HashSet<>();
 
     if (predicate == null) {
-      requests.add(getRequest(Collections.<String, Object>emptyMap()));
+      requests.add(getRequest(Collections.emptyMap()));
     } else {
       for (Map<String, Object> propertyMap : getPropertyMaps(predicate)) {
         requests.add(getRequest(propertyMap));

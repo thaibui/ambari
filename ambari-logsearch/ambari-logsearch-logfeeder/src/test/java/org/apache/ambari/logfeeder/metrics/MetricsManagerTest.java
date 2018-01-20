@@ -29,11 +29,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.TreeMap;
 
-import org.apache.ambari.logfeeder.util.LogFeederUtil;
 import org.apache.hadoop.metrics2.sink.timeline.TimelineMetric;
 import org.apache.hadoop.metrics2.sink.timeline.TimelineMetrics;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
 public class MetricsManagerTest {
@@ -42,26 +40,23 @@ public class MetricsManagerTest {
   private LogFeederAMSClient mockClient;
   private Capture<TimelineMetrics> capture;
   
-  @BeforeClass
-  public static void loadProperties() throws Exception {
-    LogFeederUtil.loadProperties("logfeeder.properties");
-  }
-  
   @Before
   public void init() throws Exception {
     manager = new MetricsManager();
-    manager.init();
-    
+
     mockClient = strictMock(LogFeederAMSClient.class);
     Field f = MetricsManager.class.getDeclaredField("amsClient");
     f.setAccessible(true);
     f.set(manager, mockClient);
-    
+
+    EasyMock.expect(mockClient.getCollectorUri(null)).andReturn("null://null:null/null").anyTimes();
     capture = EasyMock.newCapture(CaptureType.FIRST);
     mockClient.emitMetrics(EasyMock.capture(capture));
     EasyMock.expectLastCall().andReturn(true).once();
-    
+
     replay(mockClient);
+    manager.setAmsClient(mockClient);
+    manager.init();
   }
   
   @Test

@@ -19,6 +19,7 @@
 package org.apache.ambari.server.controller.internal;
 
 import static org.easymock.EasyMock.anyObject;
+import static org.easymock.EasyMock.capture;
 import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
@@ -53,7 +54,6 @@ import org.apache.ambari.server.controller.HostResponse;
 import org.apache.ambari.server.controller.KerberosHelper;
 import org.apache.ambari.server.controller.MaintenanceStateHelper;
 import org.apache.ambari.server.controller.ResourceProviderFactory;
-import org.apache.ambari.server.controller.ServiceComponentHostRequest;
 import org.apache.ambari.server.controller.ServiceComponentHostResponse;
 import org.apache.ambari.server.controller.spi.Predicate;
 import org.apache.ambari.server.controller.spi.Request;
@@ -76,10 +76,9 @@ import org.apache.ambari.server.state.HostHealthStatus;
 import org.apache.ambari.server.state.HostHealthStatus.HealthStatus;
 import org.apache.ambari.server.state.HostState;
 import org.apache.ambari.server.state.MaintenanceState;
-import org.apache.ambari.server.state.ServiceComponentHost;
 import org.apache.ambari.server.state.stack.OsFamily;
-import org.apache.ambari.server.topology.LogicalRequest;
 import org.apache.ambari.server.topology.TopologyManager;
+import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockSupport;
 import org.junit.After;
@@ -124,26 +123,39 @@ public class HostResourceProviderTest extends EasyMockSupport {
     Injector injector = createInjector();
 
     AmbariManagementController managementController = injector.getInstance(AmbariManagementController.class);
+    Capture<String> rackChangeAffectedClusterName = EasyMock.newCapture();
+    managementController.registerRackChange(capture(rackChangeAffectedClusterName));
+    EasyMock.expectLastCall().once();
+
+
     Clusters clusters = injector.getInstance(Clusters.class);
     Cluster cluster = createMock(Cluster.class);
+    Host host = createMock(Host.class);
     ResourceProviderFactory resourceProviderFactory = createNiceMock(ResourceProviderFactory.class);
     ResourceProvider hostResourceProvider = getHostProvider(injector);
 
     AbstractControllerResourceProvider.init(resourceProviderFactory);
 
     expect(cluster.getClusterId()).andReturn(2L).anyTimes();
-    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<String, DesiredConfig>()).anyTimes();
+    expect(cluster.getResourceId()).andReturn(4L).anyTimes();
+    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<>()).anyTimes();
 
     expect(clusters.getCluster("Cluster100")).andReturn(cluster).atLeastOnce();
-    expect(clusters.getHost("Host100")).andReturn(null).atLeastOnce();
-    clusters.updateHostWithClusterAndAttributes(EasyMock.<Map<String, Set<String>>>anyObject(), EasyMock.<Map<String, Map<String, String>>>anyObject());
+    expect(clusters.getHost("Host100")).andReturn(host).atLeastOnce();
+    clusters.updateHostWithClusterAndAttributes(EasyMock.anyObject(), EasyMock.anyObject());
+    EasyMock.expectLastCall().once();
+
+
+    expect(host.getRackInfo()).andReturn("/default-rack").anyTimes();
+    Capture<String> newRack = EasyMock.newCapture();
+    host.setRackInfo(capture(newRack));
     EasyMock.expectLastCall().once();
 
     expect(managementController.getClusters()).andReturn(clusters).atLeastOnce();
 
-    expect(resourceProviderFactory.getHostResourceProvider(EasyMock.<Set<String>>anyObject(),
-        EasyMock.<Map<Resource.Type, String>>anyObject(),
+    expect(resourceProviderFactory.getHostResourceProvider(
         eq(managementController))).andReturn(hostResourceProvider).anyTimes();
+
     // replay
     replayAll();
 
@@ -151,8 +163,6 @@ public class HostResourceProviderTest extends EasyMockSupport {
 
     ResourceProvider provider = AbstractControllerResourceProvider.getResourceProvider(
         type,
-        PropertyHelper.getPropertyIds(type),
-        PropertyHelper.getKeyPropertyIds(type),
         managementController);
 
     // add the property map to a set for the request.  add more maps for multiple creates
@@ -163,6 +173,7 @@ public class HostResourceProviderTest extends EasyMockSupport {
     // add properties to the request map
     properties.put(HostResourceProvider.HOST_CLUSTER_NAME_PROPERTY_ID, "Cluster100");
     properties.put(HostResourceProvider.HOST_HOST_NAME_PROPERTY_ID, "Host100");
+    properties.put(HostResourceProvider.HOST_RACK_INFO_PROPERTY_ID, "/test-rack");
 
     propertySet.add(properties);
 
@@ -173,6 +184,12 @@ public class HostResourceProviderTest extends EasyMockSupport {
 
     // verify
     verifyAll();
+
+    // the registerRackChange should be called on AmbariManagementController for Cluster100 cluster
+    assertEquals("Cluster100", rackChangeAffectedClusterName.getValue());
+
+    // new rack info of the host should be /test-rack
+    assertEquals("/test-rack", newRack.getValue());
   }
 
   @Test
@@ -222,10 +239,9 @@ public class HostResourceProviderTest extends EasyMockSupport {
 
     expect(managementController.getClusters()).andReturn(clusters).anyTimes();
     expect(managementController.getAmbariMetaInfo()).andReturn(ambariMetaInfo).anyTimes();
-    expect(managementController.getHostComponents(EasyMock.<Set<ServiceComponentHostRequest>>anyObject()))
-        .andReturn(Collections.<ServiceComponentHostResponse>emptySet()).anyTimes();
-    expect(resourceProviderFactory.getHostResourceProvider(EasyMock.<Set<String>>anyObject(),
-            EasyMock.<Map<Resource.Type, String>>anyObject(),
+    expect(managementController.getHostComponents(EasyMock.anyObject()))
+        .andReturn(Collections.emptySet()).anyTimes();
+    expect(resourceProviderFactory.getHostResourceProvider(
             eq(managementController))).
         andReturn(hostResourceProvider).anyTimes();
 
@@ -236,7 +252,7 @@ public class HostResourceProviderTest extends EasyMockSupport {
     expect(clusters.getClustersForHost("Host102")).andReturn(clusterSet).anyTimes();
 
     expect(cluster.getClusterId()).andReturn(2L).anyTimes();
-    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<String, DesiredConfig>()).anyTimes();
+    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<>()).anyTimes();
 
     expect(healthStatus.getHealthStatus()).andReturn(HostHealthStatus.HealthStatus.HEALTHY).anyTimes();
     expect(healthStatus.getHealthReport()).andReturn("HEALTHY").anyTimes();
@@ -257,8 +273,6 @@ public class HostResourceProviderTest extends EasyMockSupport {
 
     ResourceProvider provider = AbstractControllerResourceProvider.getResourceProvider(
         type,
-        PropertyHelper.getPropertyIds(type),
-        PropertyHelper.getKeyPropertyIds(type),
         managementController);
 
 
@@ -317,7 +331,7 @@ public class HostResourceProviderTest extends EasyMockSupport {
 
     expect(managementController.getClusters()).andReturn(clusters).anyTimes();
     expect(managementController.getAmbariMetaInfo()).andReturn(ambariMetaInfo).anyTimes();
-    expect(managementController.getHostComponents(EasyMock.<Set<ServiceComponentHostRequest>>anyObject()))
+    expect(managementController.getHostComponents(EasyMock.anyObject()))
         .andReturn(responses).anyTimes();
 
     expect(clusters.getCluster("Cluster100")).andReturn(cluster).anyTimes();
@@ -325,7 +339,7 @@ public class HostResourceProviderTest extends EasyMockSupport {
     expect(clusters.getHosts()).andReturn(Arrays.asList(host100)).anyTimes();
 
     expect(cluster.getClusterId()).andReturn(2L).anyTimes();
-    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<String, DesiredConfig>()).anyTimes();
+    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<>()).anyTimes();
 
     expect(hostResponse1.getClusterName()).andReturn("").anyTimes();
     expect(hostResponse1.getHostname()).andReturn("Host100").anyTimes();
@@ -338,8 +352,7 @@ public class HostResourceProviderTest extends EasyMockSupport {
 
     expect(componentInfo.getCategory()).andReturn("MASTER").anyTimes();
 
-    expect(resourceProviderFactory.getHostResourceProvider(EasyMock.<Set<String>>anyObject(),
-        EasyMock.<Map<Resource.Type, String>>anyObject(),
+    expect(resourceProviderFactory.getHostResourceProvider(
         eq(managementController))).andReturn(hostResourceProvider).anyTimes();
 
     Set<String> propertyIds = new HashSet<>();
@@ -358,8 +371,6 @@ public class HostResourceProviderTest extends EasyMockSupport {
 
     ResourceProvider provider = AbstractControllerResourceProvider.getResourceProvider(
         type,
-        PropertyHelper.getPropertyIds(type),
-        PropertyHelper.getKeyPropertyIds(type),
         managementController);
 
     Set<Resource> resources = provider.getResources(request, predicate);
@@ -413,7 +424,7 @@ public class HostResourceProviderTest extends EasyMockSupport {
     // set expectations
     expect(managementController.getClusters()).andReturn(clusters).anyTimes();
     expect(managementController.getAmbariMetaInfo()).andReturn(ambariMetaInfo).anyTimes();
-    expect(managementController.getHostComponents(EasyMock.<Set<ServiceComponentHostRequest>>anyObject()))
+    expect(managementController.getHostComponents(EasyMock.anyObject()))
         .andReturn(responses).anyTimes();
 
     expect(host100.getMaintenanceState(2)).andReturn(MaintenanceState.OFF).anyTimes();
@@ -423,7 +434,7 @@ public class HostResourceProviderTest extends EasyMockSupport {
     expect(clusters.getHosts()).andReturn(Arrays.asList(host100)).anyTimes();
 
     expect(cluster.getClusterId()).andReturn(2L).anyTimes();
-    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<String, DesiredConfig>()).anyTimes();
+    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<>()).anyTimes();
 
     expect(healthStatus.getHealthStatus()).andReturn(HostHealthStatus.HealthStatus.HEALTHY).anyTimes();
     expect(healthStatus.getHealthReport()).andReturn("HEALTHY").anyTimes();
@@ -433,8 +444,7 @@ public class HostResourceProviderTest extends EasyMockSupport {
 
     expect(componentInfo.getCategory()).andReturn("MASTER").anyTimes();
 
-    expect(resourceProviderFactory.getHostResourceProvider(EasyMock.<Set<String>>anyObject(),
-        EasyMock.<Map<Resource.Type, String>>anyObject(),
+    expect(resourceProviderFactory.getHostResourceProvider(
         eq(managementController))).andReturn(hostResourceProvider).anyTimes();
 
     Set<String> propertyIds = new HashSet<>();
@@ -453,8 +463,6 @@ public class HostResourceProviderTest extends EasyMockSupport {
 
     ResourceProvider provider = AbstractControllerResourceProvider.getResourceProvider(
         type,
-        PropertyHelper.getPropertyIds(type),
-        PropertyHelper.getKeyPropertyIds(type),
         managementController);
 
 
@@ -510,7 +518,7 @@ public class HostResourceProviderTest extends EasyMockSupport {
 
     expect(managementController.getClusters()).andReturn(clusters).anyTimes();
     expect(managementController.getAmbariMetaInfo()).andReturn(ambariMetaInfo).anyTimes();
-    expect(managementController.getHostComponents(EasyMock.<Set<ServiceComponentHostRequest>>anyObject()))
+    expect(managementController.getHostComponents(EasyMock.anyObject()))
         .andReturn(responses).anyTimes();
 
     expect(clusters.getCluster("Cluster100")).andReturn(cluster).anyTimes();
@@ -518,7 +526,7 @@ public class HostResourceProviderTest extends EasyMockSupport {
     expect(clusters.getHosts()).andReturn(Arrays.asList(host100)).anyTimes();
 
     expect(cluster.getClusterId()).andReturn(2L).anyTimes();
-    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<String, DesiredConfig>()).anyTimes();
+    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<>()).anyTimes();
 
     expect(hostResponse1.getClusterName()).andReturn("Cluster100").anyTimes();
     expect(hostResponse1.getHostname()).andReturn("Host100").anyTimes();
@@ -530,8 +538,7 @@ public class HostResourceProviderTest extends EasyMockSupport {
 
     expect(componentInfo.getCategory()).andReturn("MASTER").anyTimes();
 
-    expect(resourceProviderFactory.getHostResourceProvider(EasyMock.<Set<String>>anyObject(),
-        EasyMock.<Map<Resource.Type, String>>anyObject(),
+    expect(resourceProviderFactory.getHostResourceProvider(
         eq(managementController))).andReturn(hostResourceProvider).anyTimes();
 
     Set<String> propertyIds = new HashSet<>();
@@ -550,8 +557,6 @@ public class HostResourceProviderTest extends EasyMockSupport {
 
     ResourceProvider provider = AbstractControllerResourceProvider.getResourceProvider(
         type,
-        PropertyHelper.getPropertyIds(type),
-        PropertyHelper.getKeyPropertyIds(type),
         managementController);
 
     Set<Resource> resources = provider.getResources(request, predicate);
@@ -598,14 +603,13 @@ public class HostResourceProviderTest extends EasyMockSupport {
     expect(clusters.getHosts()).andReturn(Arrays.asList(host100)).anyTimes();
 
     expect(cluster.getClusterId()).andReturn(2L).anyTimes();
-    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<String, DesiredConfig>()).anyTimes();
+    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<>()).anyTimes();
 
     expect(hostResponse1.getClusterName()).andReturn("Cluster100").anyTimes();
     expect(hostResponse1.getHostname()).andReturn("Host100").anyTimes();
     expect(hostResponse1.getStatus()).andReturn(HealthStatus.UNKNOWN.name()).anyTimes();
     expect(hostResponse1.getHealthReport()).andReturn("UNKNOWN").anyTimes();
-    expect(resourceProviderFactory.getHostResourceProvider(EasyMock.<Set<String>>anyObject(),
-        EasyMock.<Map<Resource.Type, String>>anyObject(),
+    expect(resourceProviderFactory.getHostResourceProvider(
         eq(managementController))).andReturn(hostResourceProvider).anyTimes();
 
     Set<String> propertyIds = new HashSet<>();
@@ -624,8 +628,6 @@ public class HostResourceProviderTest extends EasyMockSupport {
 
     ResourceProvider provider = AbstractControllerResourceProvider.getResourceProvider(
         type,
-        PropertyHelper.getPropertyIds(type),
-        PropertyHelper.getKeyPropertyIds(type),
         managementController);
 
     Set<Resource> resources = provider.getResources(request, predicate);
@@ -697,19 +699,18 @@ public class HostResourceProviderTest extends EasyMockSupport {
 
     expect(managementController.getClusters()).andReturn(clusters).anyTimes();
     expect(managementController.getAmbariMetaInfo()).andReturn(ambariMetaInfo).anyTimes();
-    expect(managementController.getHostComponents(EasyMock.<Set<ServiceComponentHostRequest>>anyObject()))
+    expect(managementController.getHostComponents(EasyMock.anyObject()))
         .andReturn(responses).anyTimes();
     expect(clusters.getCluster("Cluster100")).andReturn(cluster).anyTimes();
     expect(clusters.getClustersForHost("Host100")).andReturn(clusterSet).anyTimes();
     expect(clusters.getHosts()).andReturn(Arrays.asList(host100)).anyTimes();
     expect(cluster.getClusterId()).andReturn(2L).anyTimes();
-    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<String, DesiredConfig>()).anyTimes();
+    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<>()).anyTimes();
 
     expect(ambariMetaInfo.getComponent((String) anyObject(), (String) anyObject(),
         (String) anyObject(), (String) anyObject())).andReturn(componentInfo).anyTimes();
     expect(componentInfo.getCategory()).andReturn("SLAVE").anyTimes();
-    expect(resourceProviderFactory.getHostResourceProvider(EasyMock.<Set<String>>anyObject(),
-        EasyMock.<Map<Resource.Type, String>>anyObject(),
+    expect(resourceProviderFactory.getHostResourceProvider(
         eq(managementController))).andReturn(hostResourceProvider).anyTimes();
 
 
@@ -730,8 +731,6 @@ public class HostResourceProviderTest extends EasyMockSupport {
 
     ResourceProvider provider = AbstractControllerResourceProvider.getResourceProvider(
         type,
-        PropertyHelper.getPropertyIds(type),
-        PropertyHelper.getKeyPropertyIds(type),
         managementController);
 
     Set<Resource> resources = provider.getResources(request, predicate);
@@ -790,13 +789,13 @@ public class HostResourceProviderTest extends EasyMockSupport {
 
     expect(managementController.getClusters()).andReturn(clusters).anyTimes();
     expect(managementController.getAmbariMetaInfo()).andReturn(ambariMetaInfo).anyTimes();
-    expect(managementController.getHostComponents(EasyMock.<Set<ServiceComponentHostRequest>>anyObject()))
+    expect(managementController.getHostComponents(EasyMock.anyObject()))
         .andReturn(responses).anyTimes();
     expect(clusters.getCluster("Cluster100")).andReturn(cluster).anyTimes();
     expect(clusters.getClustersForHost("Host100")).andReturn(clusterSet).anyTimes();
     expect(clusters.getHosts()).andReturn(Arrays.asList(host100)).anyTimes();
     expect(cluster.getClusterId()).andReturn(2L).anyTimes();
-    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<String, DesiredConfig>()).anyTimes();
+    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<>()).anyTimes();
     expect(hostResponse1.getClusterName()).andReturn("Cluster100").anyTimes();
     expect(hostResponse1.getHostname()).andReturn("Host100").anyTimes();
     expect(hostResponse1.getStatus()).andReturn(HealthStatus.ALERT.name()).anyTimes();
@@ -804,8 +803,7 @@ public class HostResourceProviderTest extends EasyMockSupport {
     expect(ambariMetaInfo.getComponent((String) anyObject(), (String) anyObject(),
         (String) anyObject(), (String) anyObject())).andReturn(componentInfo).anyTimes();
     expect(componentInfo.getCategory()).andReturn("SLAVE").anyTimes();
-    expect(resourceProviderFactory.getHostResourceProvider(EasyMock.<Set<String>>anyObject(),
-        EasyMock.<Map<Resource.Type, String>>anyObject(),
+    expect(resourceProviderFactory.getHostResourceProvider(
         eq(managementController))).andReturn(hostResourceProvider).anyTimes();
 
 
@@ -825,8 +823,6 @@ public class HostResourceProviderTest extends EasyMockSupport {
 
     ResourceProvider provider = AbstractControllerResourceProvider.getResourceProvider(
         type,
-        PropertyHelper.getPropertyIds(type),
-        PropertyHelper.getKeyPropertyIds(type),
         managementController);
 
 
@@ -885,8 +881,8 @@ public class HostResourceProviderTest extends EasyMockSupport {
     // set expectations
     expect(managementController.getClusters()).andReturn(clusters).anyTimes();
     expect(managementController.getAmbariMetaInfo()).andReturn(ambariMetaInfo).anyTimes();
-    expect(managementController.getHostComponents(EasyMock.<Set<ServiceComponentHostRequest>>anyObject()))
-        .andReturn(Collections.<ServiceComponentHostResponse>emptySet()).anyTimes();
+    expect(managementController.getHostComponents(EasyMock.anyObject()))
+        .andReturn(Collections.emptySet()).anyTimes();
     expect(clusters.getCluster("Cluster100")).andReturn(cluster).anyTimes();
     expect(clusters.getClustersForHost("Host100")).andReturn(clusterSet).anyTimes();
     expect(clusters.getHosts()).andReturn(Arrays.asList(host100)).anyTimes();
@@ -896,12 +892,11 @@ public class HostResourceProviderTest extends EasyMockSupport {
     expectLastCall().anyTimes();
     expect(cluster.getClusterId()).andReturn(2L).anyTimes();
     expect(cluster.getResourceId()).andReturn(4L).anyTimes();
-    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<String, DesiredConfig>()).anyTimes();
+    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<>()).anyTimes();
     expect(hostResponse1.getClusterName()).andReturn("Cluster100").anyTimes();
     expect(hostResponse1.getHostname()).andReturn("Host100").anyTimes();
     expect(hostResponse1.getHealthReport()).andReturn("HEALTHY").anyTimes();
-    expect(resourceProviderFactory.getHostResourceProvider(EasyMock.<Set<String>>anyObject(),
-        EasyMock.<Map<Resource.Type, String>>anyObject(),
+    expect(resourceProviderFactory.getHostResourceProvider(
         eq(managementController))).andReturn(hostResourceProvider).anyTimes();
 
     // replay
@@ -925,8 +920,6 @@ public class HostResourceProviderTest extends EasyMockSupport {
 
     ResourceProvider provider = AbstractControllerResourceProvider.getResourceProvider(
         Resource.Type.Host,
-        PropertyHelper.getPropertyIds(Resource.Type.Host),
-        PropertyHelper.getKeyPropertyIds(Resource.Type.Host),
         managementController);
 
     provider.updateResources(request, predicate);
@@ -972,8 +965,8 @@ public class HostResourceProviderTest extends EasyMockSupport {
     // set expectations
     expect(managementController.getClusters()).andReturn(clusters).anyTimes();
     expect(managementController.getAmbariMetaInfo()).andReturn(ambariMetaInfo).anyTimes();
-    expect(managementController.getHostComponents(EasyMock.<Set<ServiceComponentHostRequest>>anyObject()))
-        .andReturn(Collections.<ServiceComponentHostResponse>emptySet()).anyTimes();
+    expect(managementController.getHostComponents(EasyMock.anyObject()))
+        .andReturn(Collections.emptySet()).anyTimes();
     managementController.registerRackChange("Cluster100");
     expectLastCall().anyTimes();
     expect(clusters.getCluster("Cluster100")).andReturn(cluster).anyTimes();
@@ -984,12 +977,11 @@ public class HostResourceProviderTest extends EasyMockSupport {
     expectLastCall().anyTimes();
     expect(cluster.getClusterId()).andReturn(2L).anyTimes();
     expect(cluster.getResourceId()).andReturn(4L).anyTimes();
-    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<String, DesiredConfig>()).anyTimes();
+    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<>()).anyTimes();
     expect(hostResponse1.getClusterName()).andReturn("Cluster100").anyTimes();
     expect(hostResponse1.getHostname()).andReturn("Host100").anyTimes();
     expect(hostResponse1.getHealthReport()).andReturn("HEALTHY").anyTimes();
-    expect(resourceProviderFactory.getHostResourceProvider(EasyMock.<Set<String>>anyObject(),
-        EasyMock.<Map<Resource.Type, String>>anyObject(),
+    expect(resourceProviderFactory.getHostResourceProvider(
         eq(managementController))).andReturn(hostResourceProvider).anyTimes();
 
     // replay
@@ -999,8 +991,6 @@ public class HostResourceProviderTest extends EasyMockSupport {
 
     ResourceProvider provider = AbstractControllerResourceProvider.getResourceProvider(
         type,
-        PropertyHelper.getPropertyIds(type),
-        PropertyHelper.getKeyPropertyIds(type),
         managementController);
 
     // add the property map to a set for the request.
@@ -1053,15 +1043,15 @@ public class HostResourceProviderTest extends EasyMockSupport {
     expect(clusters.getHost("Host100")).andReturn(host1).anyTimes();
     expect(clusters.getCluster("Cluster100")).andReturn(cluster).anyTimes();
     expect(clusters.getClustersForHost("Host100")).andReturn(clusterSet).anyTimes();
-    expect(cluster.getServiceComponentHosts("Host100")).andReturn(Collections.<ServiceComponentHost>emptyList());
+    expect(cluster.getServiceComponentHosts("Host100")).andReturn(Collections.emptyList());
     expect(cluster.getClusterId()).andReturn(100L).anyTimes();
-    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<String, DesiredConfig>()).anyTimes();
+    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<>()).anyTimes();
     clusters.deleteHost("Host100");
     clusters.publishHostsDeletion(Collections.EMPTY_SET, Collections.singleton("Host100"));
     expect(host1.getHostName()).andReturn("Host100").anyTimes();
     expect(healthStatus.getHealthStatus()).andReturn(HostHealthStatus.HealthStatus.HEALTHY).anyTimes();
     expect(healthStatus.getHealthReport()).andReturn("HEALTHY").anyTimes();
-    expect(topologyManager.getRequests(Collections.<Long>emptyList())).andReturn(Collections.<LogicalRequest>emptyList()).anyTimes();
+    expect(topologyManager.getRequests(Collections.emptyList())).andReturn(Collections.emptyList()).anyTimes();
 
     // replay
     replayAll();
@@ -1086,8 +1076,7 @@ public class HostResourceProviderTest extends EasyMockSupport {
   public static HostResourceProvider getHostProvider(AmbariManagementController managementController) {
     Resource.Type type = Resource.Type.Host;
 
-    return new HostResourceProvider(PropertyHelper.getPropertyIds(type),
-        PropertyHelper.getKeyPropertyIds(type),
+    return new HostResourceProvider(
         managementController);
   }
 
@@ -1210,10 +1199,10 @@ public class HostResourceProviderTest extends EasyMockSupport {
     expect(managementController.getClusters()).andReturn(clusters).anyTimes();
     expect(clusters.getCluster("cluster1")).andReturn(cluster);
     expect(clusters.getHost("host1")).andReturn(host);
-    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<String, DesiredConfig>()).anyTimes();
+    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<>()).anyTimes();
     expect(host.getHostName()).andReturn("host1").anyTimes();
     // because cluster is not in set will result in HostNotFoundException
-    expect(clusters.getClustersForHost("host1")).andReturn(Collections.<Cluster>emptySet());
+    expect(clusters.getClustersForHost("host1")).andReturn(Collections.emptySet());
 
     // replay mocks
     replayAll();
@@ -1276,7 +1265,7 @@ public class HostResourceProviderTest extends EasyMockSupport {
     expect(clusters.getHost("host4")).andThrow(new HostNotFoundException("host4"));
 
     expect(cluster.getClusterId()).andReturn(2L).anyTimes();
-    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<String, DesiredConfig>()).anyTimes();
+    expect(cluster.getDesiredConfigs()).andReturn(new HashMap<>()).anyTimes();
 
     // replay mocks
     replayAll();
@@ -1294,7 +1283,7 @@ public class HostResourceProviderTest extends EasyMockSupport {
     verifyAll();
   }
 
-  public static void createHosts(AmbariManagementController controller, Set<HostRequest> requests) throws AmbariException {
+  public static void createHosts(AmbariManagementController controller, Set<HostRequest> requests) throws AmbariException, AuthorizationException {
     HostResourceProvider provider = getHostProvider(controller);
     Set<Map<String, Object>> properties = new HashSet<>();
 
@@ -1308,7 +1297,7 @@ public class HostResourceProviderTest extends EasyMockSupport {
       properties.add(requestProperties);
     }
 
-    provider.createHosts(PropertyHelper.getCreateRequest(properties, Collections.<String, String>emptyMap()));
+    provider.createHosts(PropertyHelper.getCreateRequest(properties, Collections.emptyMap()));
   }
 
   public static Set<HostResponse> getHosts(AmbariManagementController controller,
@@ -1320,26 +1309,26 @@ public class HostResourceProviderTest extends EasyMockSupport {
   public static void deleteHosts(AmbariManagementController controller, Set<HostRequest> requests)
       throws AmbariException {
     TopologyManager topologyManager = EasyMock.createNiceMock(TopologyManager.class);
-    expect(topologyManager.getRequests(Collections.<Long>emptyList())).andReturn(Collections.<LogicalRequest>emptyList()).anyTimes();
+    expect(topologyManager.getRequests(Collections.emptyList())).andReturn(Collections.emptyList()).anyTimes();
 
     replay(topologyManager);
 
     HostResourceProvider provider = getHostProvider(controller);
     HostResourceProvider.setTopologyManager(topologyManager);
-    provider.deleteHosts(requests, false, false);
+    provider.deleteHosts(requests, false);
   }
 
   public static DeleteStatusMetaData deleteHosts(AmbariManagementController controller,
-                                                 Set<HostRequest> requests, boolean dryRun, boolean forceDelete)
+                                                 Set<HostRequest> requests, boolean dryRun)
       throws AmbariException {
     TopologyManager topologyManager = EasyMock.createNiceMock(TopologyManager.class);
-    expect(topologyManager.getRequests(Collections.<Long>emptyList())).andReturn(Collections.<LogicalRequest>emptyList()).anyTimes();
+    expect(topologyManager.getRequests(Collections.emptyList())).andReturn(Collections.emptyList()).anyTimes();
 
     replay(topologyManager);
 
     HostResourceProvider provider = getHostProvider(controller);
     HostResourceProvider.setTopologyManager(topologyManager);
-    return provider.deleteHosts(requests, dryRun, forceDelete);
+    return provider.deleteHosts(requests, dryRun);
   }
 
   public static void updateHosts(AmbariManagementController controller, Set<HostRequest> requests)
@@ -1400,15 +1389,15 @@ public class HostResourceProviderTest extends EasyMockSupport {
     expect(host.convertToResponse()).andReturn(hostResponse).anyTimes();
 
     try {
-      expect(host.getDesiredHostConfigs(EasyMock.<Cluster> anyObject(),
-          EasyMock.<Map<String, DesiredConfig>> anyObject())).andReturn(desiredConfigs).anyTimes();
+      expect(host.getDesiredHostConfigs(EasyMock.anyObject(),
+          EasyMock.anyObject())).andReturn(desiredConfigs).anyTimes();
 
     } catch (AmbariException e) {
       Assert.fail(e.getMessage());
     }
     expect(host.getHostName()).andReturn(hostName).anyTimes();
     expect(host.getRackInfo()).andReturn("rackInfo").anyTimes();
-    host.setRackInfo(EasyMock.<String>anyObject());
+    host.setRackInfo(EasyMock.anyObject());
     expectLastCall().anyTimes();
     return host;
   }

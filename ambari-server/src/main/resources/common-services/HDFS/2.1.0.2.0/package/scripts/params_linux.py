@@ -31,7 +31,7 @@ from resource_management.libraries.functions import StackFeature
 from resource_management.libraries.functions.stack_features import check_stack_feature
 from resource_management.libraries.functions.stack_features import get_stack_feature_version
 from resource_management.libraries.functions import format
-from resource_management.libraries.functions.version import format_stack_version
+from resource_management.libraries.functions.version import format_stack_version, get_major_version
 from resource_management.libraries.functions.default import default
 from resource_management.libraries.functions.expect import expect
 from resource_management.libraries.functions import get_klist_path
@@ -40,7 +40,6 @@ from resource_management.libraries.functions.get_not_managed_resources import ge
 from resource_management.libraries.script.script import Script
 from resource_management.libraries.resources.hdfs_resource import HdfsResource
 from resource_management.libraries.functions.format_jvm_option import format_jvm_option
-from resource_management.libraries.functions.get_lzo_packages import get_lzo_packages
 from resource_management.libraries.functions.hdfs_utils import is_https_enabled_in_hdfs
 from resource_management.libraries.functions import is_empty
 from resource_management.libraries.functions.get_architecture import get_architecture
@@ -58,6 +57,7 @@ rolling_restart = default("/commandParams/rolling_restart", False)
 rolling_restart_safemode_exit_timeout = default("/configurations/cluster-env/namenode_rolling_restart_safemode_exit_timeout", None)
 stack_version_unformatted = config['hostLevelParams']['stack_version']
 stack_version_formatted = format_stack_version(stack_version_unformatted)
+major_stack_version = get_major_version(stack_version_formatted)
 agent_stack_retry_on_unavailability = config['hostLevelParams']['agent_stack_retry_on_unavailability']
 agent_stack_retry_count = expect("/hostLevelParams/agent_stack_retry_count", int)
 
@@ -168,7 +168,7 @@ include_file_path = default("/configurations/hdfs-site/dfs.hosts", None)
 hdfs_include_file = None
 manage_include_files = default("/configurations/hdfs-site/manage.include.files", False)
 if include_file_path and manage_include_files:
-  hdfs_include_file = list(set(slave_hosts) - set(hdfs_exclude_file))
+  hdfs_include_file = slave_hosts
 update_files_only = default("/commandParams/update_files_only",False)
 command_phase = default("/commandParams/phase","")
 
@@ -276,6 +276,8 @@ else:
 fs_checkpoint_dirs = default("/configurations/hdfs-site/dfs.namenode.checkpoint.dir", "").split(',')
 
 dfs_data_dirs = config['configurations']['hdfs-site']['dfs.datanode.data.dir']
+dfs_data_dirs_perm = default("/configurations/hdfs-site/dfs.datanode.data.dir.perm", "755")
+dfs_data_dirs_perm = int(dfs_data_dirs_perm, base=8) # convert int from octal representation
 
 data_dir_mount_file = "/var/lib/ambari-agent/data/datanode/dfs_data_dir_mount.hist"
 
@@ -381,12 +383,6 @@ HdfsResource = functools.partial(
   immutable_paths = get_not_managed_resources(),
   dfs_type = dfs_type
 )
-
-
-# The logic for LZO also exists in OOZIE's params.py
-io_compression_codecs = default("/configurations/core-site/io.compression.codecs", None)
-lzo_enabled = io_compression_codecs is not None and "com.hadoop.compression.lzo" in io_compression_codecs.lower()
-lzo_packages = get_lzo_packages(stack_version_unformatted)
   
 name_node_params = default("/commandParams/namenode", None)
 

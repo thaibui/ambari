@@ -25,7 +25,8 @@ import javax.persistence.EntityManager;
 import javax.persistence.TypedQuery;
 
 import org.apache.ambari.server.AmbariException;
-import org.apache.ambari.server.controller.RootServiceResponseFactory;
+import org.apache.ambari.server.controller.RootComponent;
+import org.apache.ambari.server.controller.RootService;
 import org.apache.ambari.server.controller.internal.AlertDefinitionResourceProvider;
 import org.apache.ambari.server.events.AlertDefinitionChangedEvent;
 import org.apache.ambari.server.events.AlertDefinitionDeleteEvent;
@@ -37,6 +38,7 @@ import org.apache.ambari.server.orm.entities.AlertGroupEntity;
 import org.apache.ambari.server.state.alert.AlertDefinition;
 import org.apache.ambari.server.state.alert.AlertDefinitionFactory;
 import org.apache.ambari.server.state.alert.Scope;
+import org.apache.ambari.server.state.alert.SourceType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -299,12 +301,24 @@ public class AlertDefinitionDAO {
     query.setParameter("clusterId", clusterId);
 
     query.setParameter("serviceName",
-        RootServiceResponseFactory.Services.AMBARI.name());
+        RootService.AMBARI.name());
 
     query.setParameter("componentName",
-        RootServiceResponseFactory.Components.AMBARI_AGENT.name());
+        RootComponent.AMBARI_AGENT.name());
 
     return daoUtils.selectList(query);
+  }
+
+  /**
+   * @return all definitions with the given sourceType
+   */
+  @RequiresSession
+  public List<AlertDefinitionEntity> findBySourceType(Long clusterId, SourceType sourceType) {
+    return daoUtils.selectList(
+      entityManagerProvider.get()
+        .createNamedQuery("AlertDefinitionEntity.findBySourceType", AlertDefinitionEntity.class)
+        .setParameter("clusterId", clusterId)
+        .setParameter("sourceType", sourceType));
   }
 
   /**

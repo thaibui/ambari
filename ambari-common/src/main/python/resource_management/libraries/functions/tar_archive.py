@@ -46,36 +46,34 @@ def archive_directory_dereference(archive, directory):
     try_sleep = 1,
   )
 
-def untar_archive(archive, directory):
+def untar_archive(archive, directory, silent=True):
   """
   :param directory:   can be a symlink and is followed
   """
-  Execute(('tar','-xvf',archive,'-C',directory+"/"),
+  options = "-xf" if silent else "-xvf"
+
+  Execute(('tar',options,archive,'-C',directory+"/"),
     sudo = True,
     tries = 3,
     try_sleep = 1,
   )
 
 def extract_archive(archive, directory):
-  if archive.endswith('.tar.gz') or path.endswith('.tgz'):
-    mode = 'r:gz'
-  elif archive.endswith('.tar.bz2') or path.endswith('.tbz'):
-    mode = 'r:bz2'
-  else:
-    raise ValueError, "Could not extract `%s` as no appropriate extractor is found" % path
-  with closing(tarfile.open(archive, mode)) as tar:
+  with closing(tarfile.open(archive, mode(archive))) as tar:
     tar.extractall(directory)
 
 def get_archive_root_dir(archive):
-  if archive.endswith('.tar.gz') or path.endswith('.tgz'):
-    mode = 'r:gz'
-  elif archive.endswith('.tar.bz2') or path.endswith('.tbz'):
-    mode = 'r:bz2'
-  else:
-    raise ValueError, "Could not extract `%s` as no appropriate extractor is found" % path
   root_dir = None
-  with closing(tarfile.open(archive, mode)) as tar:
+  with closing(tarfile.open(archive, mode(archive))) as tar:
     names = tar.getnames()
     if names:
       root_dir = os.path.commonprefix(names)
   return root_dir
+
+def mode(archive):
+  if archive.endswith('.tar.gz') or archive.endswith('.tgz'):
+    return 'r:gz'
+  elif archive.endswith('.tar.bz2') or archive.endswith('.tbz'):
+    return 'r:bz2'
+  else:
+    raise ValueError("Could not extract `%s` as no appropriate extractor is found" % archive)

@@ -67,7 +67,6 @@ App.enableDigitalClock = false;
 App.enableExperimental = false;
 
 App.supports = {
-  disableHostCheckOnAddHostWizard: false,
   preUpgradeCheck: true,
   displayOlderVersions: false,
   autoRollbackHA: false,
@@ -83,7 +82,6 @@ App.supports = {
   serviceAutoStart: true,
   logSearch: true,
   redhatSatellite: false,
-  enableIpa: false,
   addingNewRepository: false,
   kerberosStackAdvisor: true,
   logCountVizualization: false,

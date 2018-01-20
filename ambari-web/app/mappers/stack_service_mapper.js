@@ -61,8 +61,10 @@ App.stackServiceMapper = App.QuickDataMapper.create({
     bulk_commands_master_component_name: 'bulk_commands_master_component_name',
     service_name: 'service_name',
     component_category: 'component_category',
+    rolling_restart_supported: 'rolling_restart_supported',
     is_master: 'is_master',
     is_client: 'is_client',
+    component_type: 'component_type',
     stack_name: 'stack_name',
     stack_version: 'stack_version',
     stack_service_id: 'service_name',
@@ -116,6 +118,9 @@ App.stackServiceMapper = App.QuickDataMapper.create({
       // @todo: replace with server response value after API implementation
       if (nonInstallableServices.contains(stackService.service_name)) {
         stackService.is_installable = false;
+        stackService.is_selected = false;
+      }
+      if (stackService.service_type === 'HCFS' && stackService.service_name !== 'HDFS') {
         stackService.is_selected = false;
       }
       if(stackService.selection === "MANDATORY") {

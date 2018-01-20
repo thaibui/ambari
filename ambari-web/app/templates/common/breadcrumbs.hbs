@@ -17,8 +17,14 @@
 }}
 
 {{#each item in view.items}}
+  {{#if item.itemView}}
+  {{view item.itemView}}
+  {{else}}
   <a {{bindAttr class="item.disabled:disabled"}} {{action moveTo item target="view"}}>
     {{{item.formattedLabel}}}
   </a>
-  {{#unless item.isLast}}&nbsp;/&nbsp;{{/unless}}
+  {{/if}}
+  {{#unless item.isLast}}
+    <p class="breadcrumbs-forward-slash">/</p>
+  {{/unless}}
 {{/each}}

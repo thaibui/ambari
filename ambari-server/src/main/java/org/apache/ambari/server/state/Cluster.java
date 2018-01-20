@@ -119,6 +119,11 @@ public interface Cluster {
   List<ServiceComponentHost> getServiceComponentHosts(String serviceName, String componentName);
 
   /**
+   * Get all ServiceComponentHosts for this cluster.
+   */
+  List<ServiceComponentHost> getServiceComponentHosts();
+
+  /**
    * Get all hosts associated with this cluster.
    *
    * @return collection of hosts that are associated with this cluster
@@ -668,4 +673,13 @@ public interface Cluster {
    */
   void addSuspendedUpgradeParameters(Map<String, String> commandParams,
       Map<String, String> roleParams);
+
+  /**
+   * Gets a mapping of service to component/version for every installed
+   * component in the cluster which advertises a version and for which the
+   * repository has been resolved.
+   *
+   * @return a mapping of service to component version, or an empty map.
+   */
+  Map<String, Map<String, String>> getComponentVersionMap();
 }

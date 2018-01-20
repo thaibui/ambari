@@ -27,6 +27,7 @@ from resource_management.libraries.script.script import Script
 from resource_management.core.resources.service import ServiceConfig
 from resource_management.libraries.functions.format import format
 from resource_management.libraries.functions.is_empty import is_empty
+from resource_management.libraries.functions.lzo_utils import install_lzo_if_needed
 from resource_management.core.resources.system import Directory
 from resource_management.core.resources.system import File
 from resource_management.libraries.resources.xml_config import XmlConfig
@@ -44,6 +45,8 @@ def yarn(name=None, config_dir=None):
   :param config_dir: Which config directory to write configs to, which could be different during rolling upgrade.
   """
   import params
+  
+  install_lzo_if_needed()
 
   if config_dir is None:
     config_dir = params.hadoop_conf_dir
@@ -391,10 +394,22 @@ def setup_resourcemanager():
        create_parents=True,
        cd_access='a',
   )
-  File(params.rm_nodes_exclude_path,
+  File(params.exclude_file_path,
+       content=Template("exclude_hosts_list.j2"),
        owner=params.yarn_user,
        group=params.user_group
   )
+  if params.include_hosts:
+    Directory(params.rm_nodes_include_dir,
+      mode=0755,
+      create_parents=True,
+      cd_access='a',
+    )
+    File(params.include_file_path,
+      content=Template("include_hosts_list.j2"),
+      owner=params.yarn_user,
+      group=params.user_group
+    )
   # This depends on the parent directory already existing.
   File(params.yarn_job_summary_log,
      owner=params.yarn_user,
@@ -430,7 +445,7 @@ def setup_ats():
     )
   # app timeline server 1.5 directories
   if not is_empty(params.entity_groupfs_store_dir):
-    parent_path = os.path.dirname(params.entity_groupfs_store_dir)
+    parent_path = os.path.dirname(os.path.abspath(params.entity_groupfs_store_dir))
     params.HdfsResource(parent_path,
                         type="directory",
                         action="create_on_execute",
@@ -447,7 +462,7 @@ def setup_ats():
                         mode=params.entity_groupfs_store_dir_mode
                         )
   if not is_empty(params.entity_groupfs_active_dir):
-    parent_path = os.path.dirname(params.entity_groupfs_active_dir)
+    parent_path = os.path.dirname(os.path.abspath(params.entity_groupfs_active_dir))
     params.HdfsResource(parent_path,
                         type="directory",
                         action="create_on_execute",

@@ -20,6 +20,7 @@ package org.apache.ambari.logfeeder.output;
 
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.ambari.logfeeder.common.LogFeederConstants;
+import org.apache.ambari.logfeeder.conf.LogFeederProps;
 import org.apache.ambari.logfeeder.filter.Filter;
 import org.apache.ambari.logfeeder.input.InputMarker;
 import org.apache.ambari.logfeeder.output.spool.LogSpooler;
@@ -61,8 +62,8 @@ public class OutputS3File extends Output implements RolloverCondition, RolloverH
   private S3Uploader s3Uploader;
 
   @Override
-  public void init() throws Exception {
-    super.init();
+  public void init(LogFeederProps logFeederProps) throws Exception {
+    super.init(logFeederProps);
     s3OutputConfiguration = S3OutputConfiguration.fromConfigBlock(this);
   }
 
@@ -205,7 +206,7 @@ public class OutputS3File extends Output implements RolloverCondition, RolloverH
 
   @VisibleForTesting
   protected LogSpooler createSpooler(String filePath) {
-    String spoolDirectory = LogFeederUtil.getLogFeederTempDir() + "/s3/service";
+    String spoolDirectory = getLogFeederProps().getTmpDir() + "/s3/service";
     LOG.info(String.format("Creating spooler with spoolDirectory=%s, filePath=%s", spoolDirectory, filePath));
     return new LogSpooler(spoolDirectory, new File(filePath).getName()+"-", this, this,
         s3OutputConfiguration.getRolloverTimeThresholdSecs());

@@ -21,6 +21,7 @@ package org.apache.ambari.server.controller.internal;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -35,11 +36,15 @@ import org.apache.ambari.server.api.services.stackadvisor.StackAdvisorRequest;
 import org.apache.ambari.server.api.services.stackadvisor.StackAdvisorRequest.StackAdvisorRequestBuilder;
 import org.apache.ambari.server.api.services.stackadvisor.StackAdvisorRequest.StackAdvisorRequestType;
 import org.apache.ambari.server.api.services.stackadvisor.recommendations.RecommendationResponse;
+import org.apache.ambari.server.configuration.Configuration;
 import org.apache.ambari.server.controller.AmbariManagementController;
 import org.apache.ambari.server.controller.spi.Request;
+import org.apache.ambari.server.controller.spi.Resource;
 import org.apache.ambari.server.controller.spi.Resource.Type;
 import org.apache.ambari.server.controller.utilities.PropertyHelper;
 import org.apache.ambari.server.state.ChangedConfigInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.inject.Inject;
 
@@ -47,6 +52,8 @@ import com.google.inject.Inject;
  * Abstract superclass for recommendations and validations.
  */
 public abstract class StackAdvisorResourceProvider extends ReadOnlyResourceProvider {
+
+  private static final Logger LOG = LoggerFactory.getLogger(StackAdvisorResourceProvider.class);
 
   protected static final String STACK_NAME_PROPERTY_ID = PropertyHelper.getPropertyId("Versions",
       "stack_name");
@@ -77,17 +84,19 @@ public abstract class StackAdvisorResourceProvider extends ReadOnlyResourceProvi
   private static final String CONFIG_GROUPS_HOSTS_PROPERTY = "hosts";
 
   protected static StackAdvisorHelper saHelper;
+  protected static Configuration configuration;
   protected static final String USER_CONTEXT_OPERATION_PROPERTY = "user_context/operation";
   protected static final String USER_CONTEXT_OPERATION_DETAILS_PROPERTY = "user_context/operation_details";
 
   @Inject
-  public static void init(StackAdvisorHelper instance) {
+  public static void init(StackAdvisorHelper instance, Configuration serverConfig) {
     saHelper = instance;
+    configuration = serverConfig;
   }
 
-  protected StackAdvisorResourceProvider(Set<String> propertyIds, Map<Type, String> keyPropertyIds,
-      AmbariManagementController managementController) {
-    super(propertyIds, keyPropertyIds, managementController);
+  protected StackAdvisorResourceProvider(Resource.Type type, Set<String> propertyIds, Map<Type, String> keyPropertyIds,
+                                         AmbariManagementController managementController) {
+    super(type, propertyIds, keyPropertyIds, managementController);
   }
 
   protected abstract String getRequestTypePropertyId();
@@ -106,18 +115,33 @@ public abstract class StackAdvisorResourceProvider extends ReadOnlyResourceProvi
        * 
        * @see JsonRequestBodyParser for arrays parsing
        */
-      List<String> hosts = (List<String>) getRequestProperty(request, HOST_PROPERTY);
-      List<String> services = (List<String>) getRequestProperty(request, SERVICES_PROPERTY);
+      Object hostsObject = getRequestProperty(request, HOST_PROPERTY);
+      if (hostsObject instanceof LinkedHashSet) {
+        if (((LinkedHashSet)hostsObject).isEmpty()) {
+          throw new Exception("Empty host list passed to recommendation service");
+        }
+      }
+      List<String> hosts = (List<String>) hostsObject;
+
+      Object servicesObject = getRequestProperty(request, SERVICES_PROPERTY);
+      if (servicesObject instanceof LinkedHashSet) {
+        if (((LinkedHashSet)servicesObject).isEmpty()) {
+          throw new Exception("Empty service list passed to recommendation service");
+        }
+      }
+      List<String> services = (List<String>) servicesObject;
+
       Map<String, Set<String>> hgComponentsMap = calculateHostGroupComponentsMap(request);
       Map<String, Set<String>> hgHostsMap = calculateHostGroupHostsMap(request);
       Map<String, Set<String>> componentHostsMap = calculateComponentHostsMap(hgComponentsMap,
           hgHostsMap);
       Map<String, Map<String, Map<String, String>>> configurations = calculateConfigurations(request);
       Map<String, String> userContext = readUserContext(request);
+      Boolean gplLicenseAccepted = configuration.getGplLicenseAccepted();
 
       List<ChangedConfigInfo> changedConfigurations =
         requestType == StackAdvisorRequestType.CONFIGURATION_DEPENDENCIES ?
-          calculateChangedConfigurations(request) : Collections.<ChangedConfigInfo>emptyList();
+          calculateChangedConfigurations(request) : Collections.emptyList();
 
       Set<RecommendationResponse.ConfigGroup> configGroups = calculateConfigGroups(request);
       return StackAdvisorRequestBuilder.
@@ -128,12 +152,12 @@ public abstract class StackAdvisorResourceProvider extends ReadOnlyResourceProvi
         withConfigurations(configurations).
         withConfigGroups(configGroups).
         withChangedConfigurations(changedConfigurations).
-        withUserContext(userContext).build();
+        withUserContext(userContext).
+        withGPLLicenseAccepted(gplLicenseAccepted).build();
     } catch (Exception e) {
       LOG.warn("Error occurred during preparation of stack advisor request", e);
       Response response = Response.status(Status.BAD_REQUEST)
           .entity(String.format("Request body is not correct, error: %s", e.getMessage())).build();
-      // TODO: Hosts and services must not be empty
       throw new WebApplicationException(response);
     }
   }
@@ -234,7 +258,7 @@ public abstract class StackAdvisorResourceProvider extends ReadOnlyResourceProvi
               RecommendationResponse.BlueprintConfigurations configurations =
                 new RecommendationResponse.BlueprintConfigurations();
               configGroup.getConfigurations().put(siteName, configurations);
-              configGroup.getConfigurations().get(siteName).setProperties(new HashMap<String, String>());
+              configGroup.getConfigurations().get(siteName).setProperties(new HashMap<>());
             }
             configGroup.getConfigurations().get(siteName).getProperties().put(propertyName, entry.getValue());
           }

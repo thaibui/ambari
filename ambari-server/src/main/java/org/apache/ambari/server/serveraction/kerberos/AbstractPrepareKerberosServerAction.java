@@ -20,7 +20,6 @@ package org.apache.ambari.server.serveraction.kerberos;
 
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -33,6 +32,10 @@ import java.util.Set;
 import org.apache.ambari.server.AmbariException;
 import org.apache.ambari.server.agent.CommandReport;
 import org.apache.ambari.server.controller.KerberosHelper;
+import org.apache.ambari.server.controller.RootComponent;
+import org.apache.ambari.server.controller.RootService;
+import org.apache.ambari.server.serveraction.kerberos.stageutils.ResolvedKerberosKeytab;
+import org.apache.ambari.server.serveraction.kerberos.stageutils.ResolvedKerberosPrincipal;
 import org.apache.ambari.server.state.Cluster;
 import org.apache.ambari.server.state.ServiceComponentHost;
 import org.apache.ambari.server.state.kerberos.KerberosComponentDescriptor;
@@ -40,10 +43,10 @@ import org.apache.ambari.server.state.kerberos.KerberosDescriptor;
 import org.apache.ambari.server.state.kerberos.KerberosIdentityDescriptor;
 import org.apache.ambari.server.state.kerberos.KerberosServiceDescriptor;
 import org.apache.ambari.server.utils.StageUtils;
+import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.reflect.TypeToken;
 import com.google.inject.Inject;
 
 public abstract class AbstractPrepareKerberosServerAction extends KerberosServerAction {
@@ -62,7 +65,7 @@ public abstract class AbstractPrepareKerberosServerAction extends KerberosServer
   private KerberosConfigDataFileWriterFactory kerberosConfigDataFileWriterFactory;
 
   @Override
-  protected CommandReport processIdentity(Map<String, String> identityRecord, String evaluatedPrincipal, KerberosOperationHandler operationHandler, Map<String, String> kerberosConfiguration, Map<String, Object> requestSharedDataContext) throws AmbariException {
+  protected CommandReport processIdentity(ResolvedKerberosPrincipal resolvedPrincipal, KerberosOperationHandler operationHandler, Map<String, String> kerberosConfiguration, Map<String, Object> requestSharedDataContext) throws AmbariException {
     throw new UnsupportedOperationException();
   }
 
@@ -122,15 +125,17 @@ public abstract class AbstractPrepareKerberosServerAction extends KerberosServer
         throw new AmbariException(message, e);
       }
 
+      HashMap<String, ResolvedKerberosKeytab> resolvedKeytabs = new HashMap<>();
+      String realm = getDefaultRealm(getCommandParameters());
+
       try {
         Map<String, Set<String>> propertiesToIgnore = null;
-
         // Iterate over the components installed on the current host to get the service and
         // component-level Kerberos descriptors in order to determine which principals,
         // keytab files, and configurations need to be created or updated.
         for (Component sch : schToProcess) {
           String hostName = sch.getHostName();
-
+          Long hostId = sch.getHostId();
           String serviceName = sch.getServiceName();
           String componentName = sch.getServiceComponentName();
 
@@ -139,9 +144,23 @@ public abstract class AbstractPrepareKerberosServerAction extends KerberosServer
           if (serviceDescriptor != null) {
             List<KerberosIdentityDescriptor> serviceIdentities = serviceDescriptor.getIdentities(true, filterContext);
 
+            if (!StringUtils.isEmpty(hostName)) {
+              // Update the configurations with the relevant hostname
+              Map<String, String> generalProperties = currentConfigurations.get("");
+              if (generalProperties == null) {
+                generalProperties = new HashMap<>();
+                currentConfigurations.put("", generalProperties);
+              }
+
+              // Add the current hostname under "host" and "hostname"
+              generalProperties.put("host", hostName);
+              generalProperties.put("hostname", hostName);
+            }
+
             // Add service-level principals (and keytabs)
             kerberosHelper.addIdentities(kerberosIdentityDataFileWriter, serviceIdentities,
-                identityFilter, hostName, serviceName, componentName, kerberosConfigurations, currentConfigurations);
+                identityFilter, hostName, hostId, serviceName, componentName, kerberosConfigurations, currentConfigurations,
+                resolvedKeytabs, realm);
             propertiesToIgnore = gatherPropertiesToIgnore(serviceIdentities, propertiesToIgnore);
 
             KerberosComponentDescriptor componentDescriptor = serviceDescriptor.getComponent(componentName);
@@ -152,11 +171,12 @@ public abstract class AbstractPrepareKerberosServerAction extends KerberosServer
               // Calculate the set of configurations to update and replace any variables
               // using the previously calculated Map of configurations for the host.
               kerberosHelper.mergeConfigurations(kerberosConfigurations,
-                  componentDescriptor.getConfigurations(true), currentConfigurations);
+                  componentDescriptor.getConfigurations(true), currentConfigurations, null);
 
               // Add component-level principals (and keytabs)
               kerberosHelper.addIdentities(kerberosIdentityDataFileWriter, componentIdentities,
-                  identityFilter, hostName, serviceName, componentName, kerberosConfigurations, currentConfigurations);
+                  identityFilter, hostName, hostId, serviceName, componentName, kerberosConfigurations, currentConfigurations,
+                  resolvedKeytabs, realm);
               propertiesToIgnore = gatherPropertiesToIgnore(componentIdentities, propertiesToIgnore);
             }
           }
@@ -173,11 +193,12 @@ public abstract class AbstractPrepareKerberosServerAction extends KerberosServer
               // component.
               String componentName = KerberosHelper.AMBARI_SERVER_KERBEROS_IDENTITY_NAME.equals(identity.getName())
                   ? "AMBARI_SERVER_SELF"
-                  : "AMBARI_SERVER";
+                  : RootComponent.AMBARI_SERVER.name();
 
               List<KerberosIdentityDescriptor> componentIdentities = Collections.singletonList(identity);
               kerberosHelper.addIdentities(kerberosIdentityDataFileWriter, componentIdentities,
-                  identityFilter, KerberosHelper.AMBARI_SERVER_HOST_NAME, "AMBARI", componentName, kerberosConfigurations, currentConfigurations);
+                  identityFilter, StageUtils.getHostName(), ambariServerHostID(), RootService.AMBARI.name(), componentName, kerberosConfigurations, currentConfigurations,
+                  resolvedKeytabs, realm);
               propertiesToIgnore = gatherPropertiesToIgnore(componentIdentities, propertiesToIgnore);
             }
           }
@@ -185,6 +206,11 @@ public abstract class AbstractPrepareKerberosServerAction extends KerberosServer
 
         if ((propertiesToBeIgnored != null) && (propertiesToIgnore != null)) {
           propertiesToBeIgnored.putAll(propertiesToIgnore);
+        }
+
+        // create database records for keytabs that must be presented on cluster
+        for (ResolvedKerberosKeytab keytab : resolvedKeytabs.values()) {
+          kerberosHelper.createResolvedKeytab(keytab);
         }
       } catch (IOException e) {
         String message = String.format("Failed to write index file - %s", identityDataFile.getAbsolutePath());
@@ -205,39 +231,6 @@ public abstract class AbstractPrepareKerberosServerAction extends KerberosServer
           }
         }
       }
-    }
-  }
-
-  protected Map<String, ? extends Collection<String>> getServiceComponentFilter() {
-    String serializedValue = getCommandParameterValue(SERVICE_COMPONENT_FILTER);
-
-    if(serializedValue != null) {
-      Type type = new TypeToken<Map<String, ? extends Collection<String>>>() {}.getType();
-      return StageUtils.getGson().fromJson(serializedValue, type);
-    } else {
-      return null;
-    }
-  }
-
-  protected Set<String> getHostFilter() {
-    String serializedValue = getCommandParameterValue(HOST_FILTER);
-
-    if(serializedValue != null) {
-      Type type = new TypeToken<Set<String>>() {}.getType();
-      return StageUtils.getGson().fromJson(serializedValue, type);
-    } else {
-      return null;
-    }
-  }
-
-  protected Collection<String> getIdentityFilter() {
-    String serializedValue = getCommandParameterValue(IDENTITY_FILTER);
-
-    if(serializedValue != null) {
-      Type type = new TypeToken<Collection<String>>() {}.getType();
-      return StageUtils.getGson().fromJson(serializedValue, type);
-    } else {
-      return null;
     }
   }
 

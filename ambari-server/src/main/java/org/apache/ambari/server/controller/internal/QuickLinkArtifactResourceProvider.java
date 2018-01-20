@@ -44,8 +44,12 @@ import org.apache.ambari.server.state.StackInfo;
 import org.apache.ambari.server.state.quicklinks.Link;
 import org.apache.ambari.server.state.quicklinks.QuickLinks;
 import org.apache.ambari.server.state.quicklinksprofile.QuickLinkVisibilityController;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class QuickLinkArtifactResourceProvider extends AbstractControllerResourceProvider {
+
+  private static final Logger LOG = LoggerFactory.getLogger(QuickLinkArtifactResourceProvider.class);
 
   public static final String STACK_NAME_PROPERTY_ID = PropertyHelper.getPropertyId("QuickLinkInfo", "stack_name");
   public static final String STACK_VERSION_PROPERTY_ID = PropertyHelper.getPropertyId("QuickLinkInfo", "stack_version");
@@ -92,7 +96,7 @@ public class QuickLinkArtifactResourceProvider extends AbstractControllerResourc
    * @param managementController the management controller
    */
   protected QuickLinkArtifactResourceProvider(AmbariManagementController managementController) {
-    super(propertyIds, keyPropertyIds, managementController);
+    super(Resource.Type.QuickLink, propertyIds, keyPropertyIds, managementController);
   }
 
   @Override

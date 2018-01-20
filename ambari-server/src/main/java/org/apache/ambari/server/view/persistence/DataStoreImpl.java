@@ -119,7 +119,7 @@ public class DataStoreImpl implements DataStore {
   /**
    * The logger.
    */
-  protected final static Logger LOG = LoggerFactory.getLogger(DataStoreImpl.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DataStoreImpl.class);
 
   /**
    * Max length of entity string field.
@@ -147,7 +147,7 @@ public class DataStoreImpl implements DataStore {
     try {
       em.getTransaction().begin();
       try {
-        DynamicEntity dynamicEntity = persistEntity(entity, em, new HashSet<DynamicEntity>());
+        DynamicEntity dynamicEntity = persistEntity(entity, em, new HashSet<>());
         em.getTransaction().commit();
         Map<String, Object> props = getEntityProperties(entity);
         List<String> keys = new ArrayList<>(props.keySet());

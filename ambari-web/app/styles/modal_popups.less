@@ -21,7 +21,19 @@
   outline: none;
 }
 
+#modal-label {
+  margin-left: 20px;
+  margin-right: 20px;
+  text-indent: -20px;
+  line-height: 1.3em;
+
+  a:not(.disabled) {
+      cursor: pointer;
+  }
+}
+
 .host-component-popup-wrap {
+  min-height: 220px;
   .task-top-wrap {
     .operation-name-top {
       width: 36%;
@@ -57,6 +69,22 @@
       .progress {
         margin-bottom: 0;
       }
+    }
+  }
+  .status-dropdown {
+    .btn.dropdown-toggle:first-child {
+      min-width: 150px;
+      padding: 10px;
+      position: relative;
+      text-align: left;
+      .caret {
+        position: absolute;
+        top: 15px;
+        right: 10px;
+      }
+    }
+    ul.dropdown-menu {
+      min-width: 150px;
     }
   }
 }
@@ -318,6 +346,12 @@
 }
 
 .host-progress-popup {
+  .modal.with-footer{
+    padding-right: 0;
+    .modal-lg.modal-dialog{
+      width: 98%;
+    }
+  }
   .task-detail-info {
 
     .task-detail-log-info {
@@ -378,7 +412,7 @@
 }
 
 .modal-xlg {
-  width: 1280px;
+  width: 98%;
   .wizard {
     .container {
       width: 1236px;

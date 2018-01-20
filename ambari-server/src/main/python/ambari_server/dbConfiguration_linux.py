@@ -354,19 +354,28 @@ class PGConfig(LinuxDBMSConfig):
 
   PG_ERROR_BLOCKED = "is being accessed by other users"
   PG_STATUS_RUNNING = None
-  SERVICE_CMD = "/usr/bin/env service"
+  PG_STATUS_STOPPED = "stopped"
   PG_SERVICE_NAME = "postgresql"
   PG_HBA_DIR = None
 
-  PG_ST_CMD = "%s %s status" % (SERVICE_CMD, PG_SERVICE_NAME)
-  if os.path.isfile("/usr/bin/postgresql-setup"):
-      PG_INITDB_CMD = "/usr/bin/postgresql-setup initdb"
+  if OSCheck.is_redhat_family() and OSCheck.get_os_major_version() in OSConst.systemd_redhat_os_major_versions:
+    SERVICE_CMD = "/usr/bin/env systemctl"
+    PG_ST_CMD = "%s status %s" % (SERVICE_CMD, PG_SERVICE_NAME)
+    PG_INITDB_CMD = "/usr/bin/postgresql-setup initdb"
+    PG_START_CMD = AMBARI_SUDO_BINARY + " %s start %s" % (SERVICE_CMD, PG_SERVICE_NAME)
+    PG_RESTART_CMD = AMBARI_SUDO_BINARY + " %s restart %s" % (SERVICE_CMD, PG_SERVICE_NAME)
+    PG_HBA_RELOAD_CMD = AMBARI_SUDO_BINARY + " %s reload %s" % (SERVICE_CMD, PG_SERVICE_NAME)
   else:
-      PG_INITDB_CMD = "%s %s initdb" % (SERVICE_CMD, PG_SERVICE_NAME)
+    SERVICE_CMD = "/usr/bin/env service"
+    PG_ST_CMD = "%s %s status" % (SERVICE_CMD, PG_SERVICE_NAME)
+    if os.path.isfile("/usr/bin/postgresql-setup"):
+        PG_INITDB_CMD = "/usr/bin/postgresql-setup initdb"
+    else:
+        PG_INITDB_CMD = "%s %s initdb" % (SERVICE_CMD, PG_SERVICE_NAME)
 
-  PG_START_CMD = AMBARI_SUDO_BINARY + " %s %s start" % (SERVICE_CMD, PG_SERVICE_NAME)
-  PG_RESTART_CMD = AMBARI_SUDO_BINARY + " %s %s restart" % (SERVICE_CMD, PG_SERVICE_NAME)
-  PG_HBA_RELOAD_CMD = AMBARI_SUDO_BINARY + " %s %s reload" % (SERVICE_CMD, PG_SERVICE_NAME)
+    PG_START_CMD = AMBARI_SUDO_BINARY + " %s %s start" % (SERVICE_CMD, PG_SERVICE_NAME)
+    PG_RESTART_CMD = AMBARI_SUDO_BINARY + " %s %s restart" % (SERVICE_CMD, PG_SERVICE_NAME)
+    PG_HBA_RELOAD_CMD = AMBARI_SUDO_BINARY + " %s %s reload" % (SERVICE_CMD, PG_SERVICE_NAME)
 
   PG_HBA_CONF_FILE = None
   PG_HBA_CONF_FILE_BACKUP = None
@@ -610,13 +619,13 @@ class PGConfig(LinuxDBMSConfig):
     retcode, out, err = run_os_command(PGConfig.PG_ST_CMD)
     # on RHEL and SUSE PG_ST_COMD returns RC 0 for running and 3 for stoppped
     if retcode == 0:
-      if out.strip() == "Running clusters:":
-        pg_status = "stopped"
+      if out.strip() == "Running clusters:" or "active: inactive" in out.lower():
+        pg_status = PGConfig.PG_STATUS_STOPPED
       else:
         pg_status = PGConfig.PG_STATUS_RUNNING
     else:
       if retcode == 3:
-        pg_status = "stopped"
+        pg_status = PGConfig.PG_STATUS_STOPPED
       else:
         pg_status = None
     return pg_status, retcode, out, err
@@ -750,7 +759,7 @@ class PGConfig(LinuxDBMSConfig):
     PGConfig._configure_postgresql_conf()
     #restart postgresql if already running
     pg_status, retcode, out, err = PGConfig._get_postgre_status()
-    if pg_status == PGConfig.PG_STATUS_RUNNING:
+    if pg_status != PGConfig.PG_STATUS_STOPPED:
       retcode, out, err = PGConfig._restart_postgres()
       return retcode, out, err
     return 0, "", ""
@@ -770,7 +779,7 @@ class PGConfig(LinuxDBMSConfig):
       process.kill()
       pg_status, retcode, out, err = PGConfig._get_postgre_status()
       # SUSE linux set status of stopped postgresql proc to unused
-      if pg_status == "unused" or pg_status == "stopped":
+      if pg_status == "unused" or pg_status == PGConfig.PG_STATUS_STOPPED:
         print_info_msg("PostgreSQL is stopped. Restarting ...")
         retcode, out, err = run_os_command(PGConfig.PG_START_CMD)
         return retcode, out, err

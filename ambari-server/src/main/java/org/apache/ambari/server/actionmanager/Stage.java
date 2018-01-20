@@ -35,7 +35,6 @@ import org.apache.ambari.server.agent.AgentCommand.AgentCommandType;
 import org.apache.ambari.server.agent.ExecutionCommand;
 import org.apache.ambari.server.metadata.RoleCommandPair;
 import org.apache.ambari.server.orm.dao.HostRoleCommandDAO;
-import org.apache.ambari.server.orm.entities.HostRoleCommandEntity;
 import org.apache.ambari.server.orm.entities.RoleSuccessCriteriaEntity;
 import org.apache.ambari.server.orm.entities.StageEntity;
 import org.apache.ambari.server.serveraction.ServerAction;
@@ -168,7 +167,7 @@ public class Stage {
       String hostname = getSafeHost(command.getHostName());
 
       if (!hostRoleCommands.containsKey(hostname)) {
-        hostRoleCommands.put(hostname, new LinkedHashMap<String, HostRoleCommand>());
+        hostRoleCommands.put(hostname, new LinkedHashMap<>());
       }
 
       hostRoleCommands.get(hostname).put(command.getRole().toString(), command);
@@ -191,8 +190,8 @@ public class Stage {
     stageEntity.setSkippable(skippable);
     stageEntity.setAutoSkipFailureSupported(supportsAutoSkipOnFailure);
     stageEntity.setRequestContext(requestContext);
-    stageEntity.setHostRoleCommands(new ArrayList<HostRoleCommandEntity>());
-    stageEntity.setRoleSuccessCriterias(new ArrayList<RoleSuccessCriteriaEntity>());
+    stageEntity.setHostRoleCommands(new ArrayList<>());
+    stageEntity.setRoleSuccessCriterias(new ArrayList<>());
     stageEntity.setCommandParamsStage(commandParamsStage);
     if (null != hostParamsStage) {
       stageEntity.setHostParamsStage(hostParamsStage);
@@ -225,7 +224,7 @@ public class Stage {
   void loadExecutionCommandWrappers() {
     for (Map.Entry<String, Map<String, HostRoleCommand>> hostRoleCommandEntry : hostRoleCommands.entrySet()) {
       String hostname = hostRoleCommandEntry.getKey();
-      commandsToSend.put(hostname, new ArrayList<ExecutionCommandWrapper>());
+      commandsToSend.put(hostname, new ArrayList<>());
       Map<String, HostRoleCommand> roleCommandMap = hostRoleCommandEntry.getValue();
       for (Map.Entry<String, HostRoleCommand> roleCommandEntry : roleCommandMap.entrySet()) {
         commandsToSend.get(hostname).add(roleCommandEntry.getValue().getExecutionCommandWrapper());
@@ -466,7 +465,8 @@ public class Stage {
    * @param retryAllowed
    *          indicates whether retry after failure is allowed
    */
-  public synchronized void addServerActionCommand(String actionName, @Nullable String userName,
+  public synchronized void addServerActionCommand(String actionName,
+      @Nullable String userName,
       Role role, RoleCommand command, String clusterName,
       ServiceComponentHostServerActionEvent event, @Nullable Map<String, String> commandParams,
       @Nullable String commandDetail, @Nullable Map<String, Map<String, String>> configTags,
@@ -813,12 +813,12 @@ public class Stage {
 
     String role = r.toString();
     if (commandsToSend.get(hostname) == null) {
-      commandsToSend.put(hostname, new ArrayList<ExecutionCommandWrapper>());
+      commandsToSend.put(hostname, new ArrayList<>());
     }
     commandsToSend.get(hostname).add(
         origStage.getExecutionCommandWrapper(hostname, role));
     if (hostRoleCommands.get(hostname) == null) {
-      hostRoleCommands.put(hostname, new LinkedHashMap<String, HostRoleCommand>());
+      hostRoleCommands.put(hostname, new LinkedHashMap<>());
     }
     // TODO add reference to ExecutionCommand into HostRoleCommand
     hostRoleCommands.get(hostname).put(role,

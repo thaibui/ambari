@@ -19,6 +19,7 @@
 
 package org.apache.ambari.logfeeder.output;
 
+import org.apache.ambari.logfeeder.conf.LogFeederProps;
 import org.apache.ambari.logfeeder.input.InputMarker;
 import org.apache.ambari.logfeeder.output.spool.LogSpooler;
 import org.apache.ambari.logfeeder.output.spool.LogSpoolerContext;
@@ -64,8 +65,8 @@ public class OutputHDFSFile extends Output implements RolloverHandler, RolloverC
   private LogSpooler logSpooler;
 
   @Override
-  public void init() throws Exception {
-    super.init();
+  public void init(LogFeederProps logFeederProps) throws Exception {
+    super.init(logFeederProps);
     hdfsOutDir = getStringValue("hdfs_out_dir");
     hdfsHost = getStringValue("hdfs_host");
     hdfsPort = getStringValue("hdfs_port");
@@ -87,7 +88,7 @@ public class OutputHDFSFile extends Output implements RolloverHandler, RolloverC
     HashMap<String, String> contextParam = buildContextParam();
     hdfsOutDir = PlaceholderUtil.replaceVariables(hdfsOutDir, contextParam);
     LOG.info("hdfs Output dir=" + hdfsOutDir);
-    String localFileDir = LogFeederUtil.getLogFeederTempDir() + "hdfs/service/";
+    String localFileDir = logFeederProps.getTmpDir() + "hdfs/service/";
     logSpooler = new LogSpooler(localFileDir, filenamePrefix, this, this);
     this.startHDFSCopyThread();
   }

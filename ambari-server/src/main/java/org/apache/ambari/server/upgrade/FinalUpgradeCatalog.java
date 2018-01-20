@@ -35,7 +35,6 @@ import org.apache.ambari.server.state.PropertyInfo;
 import org.apache.ambari.server.state.Service;
 import org.apache.ambari.server.state.StackId;
 import org.apache.ambari.server.state.StackInfo;
-import org.apache.ambari.server.utils.VersionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,7 +44,7 @@ import com.google.inject.Injector;
 /**
  * Final upgrade catalog which simply updates database version (in case if no db changes between releases)
  */
-public class FinalUpgradeCatalog extends AbstractUpgradeCatalog {
+public class FinalUpgradeCatalog extends AbstractFinalUpgradeCatalog {
 
   /**
    * Logger.
@@ -58,16 +57,6 @@ public class FinalUpgradeCatalog extends AbstractUpgradeCatalog {
   }
 
   @Override
-  protected void executeDDLUpdates() throws AmbariException, SQLException {
-    //noop
-  }
-
-  @Override
-  protected void executePreDMLUpdates() throws AmbariException, SQLException {
-    //noop
-  }
-
-  @Override
   protected void executeDMLUpdates() throws AmbariException, SQLException {
     updateClusterEnv();
   }
@@ -77,12 +66,11 @@ public class FinalUpgradeCatalog extends AbstractUpgradeCatalog {
    * <ul>
    * <li>Adds/Updates {@link ConfigHelper#CLUSTER_ENV_STACK_FEATURES_PROPERTY} from stack</li>
    * <li>Adds/Updates {@link ConfigHelper#CLUSTER_ENV_STACK_TOOLS_PROPERTY} from stack</li>
+   * <li>Adds/Updates {@link ConfigHelper#CLUSTER_ENV_STACK_PACKAGES_PROPERTY} from stack</li>
    * </ul>
    *
    * Note: Config properties stack_features and stack_tools should always be updated to latest values as defined
    * in the stack on an Ambari upgrade.
-   *
-   * @throws Exception
    */
   protected void updateClusterEnv() throws AmbariException {
 
@@ -106,7 +94,8 @@ public class FinalUpgradeCatalog extends AbstractUpgradeCatalog {
         List<PropertyInfo> properties = stackInfo.getProperties();
         for(PropertyInfo property : properties) {
           if(property.getName().equals(ConfigHelper.CLUSTER_ENV_STACK_FEATURES_PROPERTY) ||
-              property.getName().equals(ConfigHelper.CLUSTER_ENV_STACK_TOOLS_PROPERTY)) {
+              property.getName().equals(ConfigHelper.CLUSTER_ENV_STACK_TOOLS_PROPERTY) ||
+              property.getName().equals(ConfigHelper.CLUSTER_ENV_STACK_PACKAGES_PROPERTY)) {
             propertyMap.put(property.getName(), property.getValue());
           }
         }
@@ -115,17 +104,4 @@ public class FinalUpgradeCatalog extends AbstractUpgradeCatalog {
     }
   }
 
-  @Override
-  public String getTargetVersion() {
-    return getFinalVersion();
-  }
-
-  @Override
-  public boolean isFinal() {
-    return true;
-  }
-
-  private String getFinalVersion() {
-    return VersionUtils.getVersionSubstring(configuration.getServerVersion());
-  }
 }

@@ -18,31 +18,30 @@ limitations under the License.
 
 """
 import signal
-
+import os
 import re
 
 import ambari_simplejson as json
-import sys, traceback
 
 from ambari_commons.os_check import OSCheck
 from ambari_commons.str_utils import cbool, cint
 from resource_management.core.exceptions import Fail
 from resource_management.core.logger import Logger
 from resource_management.core.resources import Package
-from resource_management.libraries.functions.packages_analyzer import allInstalledPackages, verifyDependencies
 from resource_management.libraries.functions import conf_select
 from resource_management.libraries.functions import stack_tools
 from resource_management.libraries.functions.stack_select import get_stack_versions
-from resource_management.libraries.functions.version import format_stack_version
 from resource_management.libraries.functions.repo_version_history \
     import read_actual_version_from_history_file, write_actual_version_to_history_file, REPO_VERSION_HISTORY_FILE
+from resource_management.core.providers import get_provider
 from resource_management.core.resources.system import Link
 from resource_management.libraries.functions import StackFeature
-from resource_management.libraries.functions import packages_analyzer
 from resource_management.libraries.functions.repository_util import create_repo_files, CommandRepository
 from resource_management.libraries.functions.stack_features import check_stack_feature
 from resource_management.libraries.resources.repository import Repository
 from resource_management.libraries.script.script import Script
+from resource_management.core import sudo
+
 
 class InstallPackages(Script):
   """
@@ -54,11 +53,23 @@ class InstallPackages(Script):
 
   UBUNTU_REPO_COMPONENTS_POSTFIX = ["main"]
 
+  def __init__(self):
+    super(InstallPackages, self).__init__()
+
+    self.pkg_provider = get_provider("Package")
+    self.repo_files = {}
+
+
   def actionexecute(self, env):
     num_errors = 0
 
     # Parse parameters
     config = Script.get_config()
+
+    try:
+      command_repository = CommandRepository(config['repositoryFile'])
+    except KeyError:
+      raise Fail("The command repository indicated by 'repositoryFile' was not found")
 
     repo_rhel_suse = config['configurations']['cluster-env']['repo_suse_rhel_template']
     repo_ubuntu = config['configurations']['cluster-env']['repo_ubuntu_template']
@@ -68,29 +79,14 @@ class InstallPackages(Script):
     signal.signal(signal.SIGTERM, self.abort_handler)
     signal.signal(signal.SIGINT, self.abort_handler)
 
-    self.repository_version_id = None
+    self.repository_version = command_repository.version_string
 
-    base_urls = []
     # Select dict that contains parameters
     try:
-      if 'base_urls' in config['roleParams']:
-        base_urls = json.loads(config['roleParams']['base_urls'])
-
-      self.repository_version = config['roleParams']['repository_version']
       package_list = json.loads(config['roleParams']['package_list'])
       stack_id = config['roleParams']['stack_id']
-
-      if 'repository_version_id' in config['roleParams']:
-        self.repository_version_id = config['roleParams']['repository_version_id']
     except KeyError:
       pass
-
-    # current stack information
-    self.current_stack_version_formatted = None
-    if 'stack_version' in config['hostLevelParams']:
-      current_stack_version_unformatted = str(config['hostLevelParams']['stack_version'])
-      self.current_stack_version_formatted = format_stack_version(current_stack_version_unformatted)
-
 
     self.stack_name = Script.get_stack_name()
     if self.stack_name is None:
@@ -105,49 +101,35 @@ class InstallPackages(Script):
 
     self.repository_version = self.repository_version.strip()
 
-    # Install/update repositories
-    self.current_repositories = []
-    self.current_repo_files = set()
-
-    # Enable base system repositories
-    # We don't need that for RHEL family, because we leave all repos enabled
-    # except disabled HDP* ones
-    if OSCheck.is_suse_family():
-      self.current_repositories.append('base')
-    elif OSCheck.is_ubuntu_family():
-      self.current_repo_files.add('base')
-
-    Logger.info("Will install packages for repository version {0}".format(self.repository_version))
-
-    if 0 == len(base_urls):
-      Logger.warning("Repository list is empty. Ambari may not be managing the repositories for {0}.".format(self.repository_version))
-
     try:
-      if 'repositoryFile' in config:
-        create_repo_files(template, CommandRepository(config['repositoryFile']))
+      if not command_repository.items:
+        Logger.warning(
+          "Repository list is empty. Ambari may not be managing the repositories for {0}.".format(
+            self.repository_version))
       else:
-        append_to_file = False
-        for url_info in base_urls:
-          repo_name, repo_file = self.install_repository(url_info, append_to_file, template)
-          self.current_repositories.append(repo_name)
-          self.current_repo_files.add(repo_file)
-          append_to_file = True
-
-    except Exception, err:
+        Logger.info(
+          "Will install packages for repository version {0}".format(self.repository_version))
+        new_repo_files = create_repo_files(template, command_repository)
+        self.repo_files.update(new_repo_files)
+    except Exception as err:
       Logger.logger.exception("Cannot install repository files. Error: {0}".format(str(err)))
       num_errors += 1
 
     # Build structured output with initial values
     self.structured_output = {
-      'installed_repository_version': self.repository_version,
-      'stack_id': stack_id,
-      'package_installation_result': 'FAIL'
+      'package_installation_result': 'FAIL',
+      'repository_version_id': command_repository.version_id
     }
 
-    if self.repository_version_id is not None:
-      self.structured_output['repository_version_id'] = self.repository_version_id
-
     self.put_structured_out(self.structured_output)
+
+    try:
+      # check package manager non-completed transactions
+      if self.pkg_provider.check_uncompleted_transactions():
+        self.pkg_provider.print_uncompleted_transaction_hint()
+        num_errors += 1
+    except Exception as e:  # we need to ignore any exception
+      Logger.warning("Failed to check for uncompleted package manager transactions: " + str(e))
 
     if num_errors > 0:
       raise Fail("Failed to distribute repositories/install packages")
@@ -164,7 +146,7 @@ class InstallPackages(Script):
         is_package_install_successful = True
       else:
         num_errors += 1
-    except Exception, err:
+    except Exception as err:
       num_errors += 1
       Logger.logger.exception("Could not install packages. Error: {0}".format(str(err)))
 
@@ -172,12 +154,58 @@ class InstallPackages(Script):
     if num_errors > 0:
       raise Fail("Failed to distribute repositories/install packages")
 
+    self._fix_default_links_for_current()
     # if installing a version of HDP that needs some symlink love, then create them
     if is_package_install_successful and 'actual_version' in self.structured_output:
-      self._create_config_links_if_necessary(stack_id, self.structured_output['actual_version'])
+      self._relink_configurations_with_conf_select(stack_id, self.structured_output['actual_version'])
 
+  def _fix_default_links_for_current(self):
+    """
+    If a prior version of Ambari did not correctly reverse the conf symlinks, then they would
+    be put into a bad state when distributing a new stack. For example:
 
-  def _create_config_links_if_necessary(self, stack_id, stack_version):
+    /etc/component/conf (directory)
+    <stack-root>/v1/component/conf -> /etc/component/conf
+
+    When distributing v2, we'd detect the /etc/component/conf problems and would try to adjust it:
+    /etc/component/conf -> <stack-root>/current/component/conf
+    <stack-root>/v2/component/conf -> /etc/component/v2/0
+
+    The problem is that v1 never gets changed (since the stack being distributed is v2), and
+    we end up with a circular link:
+    /etc/component/conf -> <stack-root>/current/component/conf
+    <stack-root>/v1/component/conf -> /etc/component/conf
+
+    :return: None
+    """
+    Logger.info("Attempting to fix any configuration symlinks which are not in the correct state")
+    from resource_management.libraries.functions import stack_select
+    restricted_packages = conf_select.get_restricted_packages()
+
+    if 0 == len(restricted_packages):
+      Logger.info("There are no restricted conf-select packages for this installation")
+    else:
+      Logger.info("Restricting conf-select packages to {0}".format(restricted_packages))
+
+    for package_name, directories in conf_select.get_package_dirs().iteritems():
+      Logger.info("Attempting to fix the default conf links for {0}".format(package_name))
+      Logger.info("The following directories will be fixed for {0}: {1}".format(package_name, str(directories)))
+
+      component_name = None
+      for directory_struct in directories:
+        if "component" in directory_struct:
+          component_name = directory_struct["component"]
+      if component_name:
+        stack_version = stack_select.get_stack_version_before_install(component_name)
+
+      if 0 == len(restricted_packages) or package_name in restricted_packages:
+        if stack_version:
+          conf_select.convert_conf_directories_to_symlinks(package_name, stack_version, directories)
+        else:
+          Logger.warning(
+            "Unable to fix {0} since there is no known installed version for this component".format(package_name))
+
+  def _relink_configurations_with_conf_select(self, stack_id, stack_version):
     """
     Sets up the required structure for /etc/<component>/conf symlinks and <stack-root>/current
     configuration symlinks IFF the current stack is < HDP 2.3+ and the new stack is >= HDP 2.3
@@ -201,15 +229,20 @@ class InstallPackages(Script):
 
     # After upgrading hdf-select package from HDF-2.X to HDF-3.Y, we need to create this symlink
     if self.stack_name.upper() == "HDF" \
-            and not os.path.exists("/usr/bin/conf-select") and os.path.exists("/usr/bin/hdfconf-select"):
-      Link("/usr/bin/conf-select", to = "/usr/bin/hdfconf-select")
+            and not sudo.path_exists("/usr/bin/conf-select") and sudo.path_exists("/usr/bin/hdfconf-select"):
+      Link("/usr/bin/conf-select", to="/usr/bin/hdfconf-select")
+
+
+    restricted_packages = conf_select.get_restricted_packages()
+
+    if 0 == len(restricted_packages):
+      Logger.info("There are no restricted conf-select packages for this installation")
+    else:
+      Logger.info("Restricting conf-select packages to {0}".format(restricted_packages))
 
     for package_name, directories in conf_select.get_package_dirs().iteritems():
-      conf_selector_name = stack_tools.get_stack_tool_name(stack_tools.CONF_SELECTOR_NAME)
-      Logger.info("The current cluster stack of {0} does not require backing up configurations; "
-                  "only {1} versioned config directories will be created.".format(stack_version, conf_selector_name))
-      # only link configs for all known packages
-      conf_select.select(self.stack_name, package_name, stack_version, ignore_errors = True)
+      if 0 == len(restricted_packages) or package_name in restricted_packages:
+        conf_select.convert_conf_directories_to_symlinks(package_name, stack_version, directories)
 
 
   def compute_actual_version(self):
@@ -347,21 +380,36 @@ class InstallPackages(Script):
 
     # Install packages
     packages_were_checked = False
+    packages_installed_before = []
     stack_selector_package = stack_tools.get_stack_tool_package(stack_tools.STACK_SELECTOR_NAME)
+
     try:
+      # install the stack-selector; we need to supply the action as "upgrade" here since the normal
+      # install command will skip if the package is already installed in the system.
+      # This is required for non-versioned components, like stack-select, since each version of
+      # the stack comes with one. Also, scope the install by repository since we need to pick a
+      # specific repo that the stack-select tools are coming out of in case there are multiple
+      # patches installed
+      repositories = config['repositoryFile']['repositories']
+      command_repos = CommandRepository(config['repositoryFile'])
+      repository_ids = [repository['repoId'] for repository in repositories]
+      repos_to_use = {}
+      for repo_id in repository_ids:
+        if repo_id in self.repo_files:
+          repos_to_use[repo_id] = self.repo_files[repo_id]
+
       Package(stack_selector_package,
-              action="upgrade",
-              retry_on_repo_unavailability=agent_stack_retry_on_unavailability,
-              retry_count=agent_stack_retry_count
-      )
+        action="upgrade",
+        use_repos=repos_to_use,
+        retry_on_repo_unavailability=agent_stack_retry_on_unavailability,
+        retry_count=agent_stack_retry_count)
       
-      packages_installed_before = []
-      allInstalledPackages(packages_installed_before)
+      packages_installed_before = self.pkg_provider.all_installed_packages()
       packages_installed_before = [package[0] for package in packages_installed_before]
       packages_were_checked = True
       filtered_package_list = self.filter_package_list(package_list)
       try:
-        available_packages_in_repos = packages_analyzer.get_available_packages_in_repos(config['repositoryFile']['repositories'])
+        available_packages_in_repos = self.pkg_provider.get_available_packages_in_repos(command_repos)
       except Exception:
         available_packages_in_repos = []
       for package in filtered_package_list:
@@ -377,8 +425,7 @@ class InstallPackages(Script):
 
       # Remove already installed packages in case of fail
       if packages_were_checked and packages_installed_before:
-        packages_installed_after = []
-        allInstalledPackages(packages_installed_after)
+        packages_installed_after = self.pkg_provider.all_installed_packages()
         packages_installed_after = [package[0] for package in packages_installed_after]
         packages_installed_before = set(packages_installed_before)
         new_packages_installed = [package for package in packages_installed_after if package not in packages_installed_before]
@@ -393,7 +440,7 @@ class InstallPackages(Script):
           if package_version_string and (package_version_string in package):
             Package(package, action="remove")
 
-    if not verifyDependencies():
+    if not self.pkg_provider.verify_dependencies():
       ret_code = 1
       Logger.logger.error("Failure while verifying dependencies")
       Logger.logger.error("*******************************************************************************")
@@ -410,36 +457,6 @@ class InstallPackages(Script):
       ret_code = 1
       Logger.logger.exception("Failure while computing actual version. Error: {0}".format(str(err)))
     return ret_code
-
-  def install_repository(self, url_info, append_to_file, template):
-
-    repo = {
-      'repoName': "{0}-{1}".format(url_info['name'], self.repository_version)
-    }
-
-    if not 'baseUrl' in url_info:
-      repo['baseurl'] = None
-    else:
-      repo['baseurl'] = url_info['baseUrl']
-
-    if not 'mirrorsList' in url_info:
-      repo['mirrorsList'] = None
-    else:
-      repo['mirrorsList'] = url_info['mirrorsList']
-
-    ubuntu_components = [url_info['name']] + self.UBUNTU_REPO_COMPONENTS_POSTFIX
-    file_name = self.stack_name + "-" + self.repository_version
-
-    Repository(repo['repoName'],
-      action = "create",
-      base_url = repo['baseurl'],
-      mirror_list = repo['mirrorsList'],
-      repo_file_name = file_name,
-      repo_template = template,
-      append_to_file = append_to_file,
-      components = ubuntu_components,  # ubuntu specific
-    )
-    return repo['repoName'], file_name
 
   def abort_handler(self, signum, frame):
     Logger.error("Caught signal {0}, will handle it gracefully. Compute the actual version if possible before exiting.".format(signum))

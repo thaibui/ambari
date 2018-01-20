@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import javax.xml.bind.Unmarshaller;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlAttribute;
@@ -70,6 +71,10 @@ public class ClusterGrouping extends Grouping {
     return new ClusterBuilder(this);
   }
 
+  @Override
+  protected boolean serviceCheckAfterProcessing() {
+    return false;
+  }
 
   /**
    * Represents a single-stage execution that happens as part of a cluster-wide
@@ -122,6 +127,20 @@ public class ClusterGrouping extends Grouping {
       return Objects.toStringHelper(this).add("id", id).add("title",
           title).omitNullValues().toString();
     }
+
+    /**
+     * If a task is found that is configure, set its associated service.  This is used
+     * if the configuration type cannot be isolated by service.
+     */
+    void afterUnmarshal(Unmarshaller unmarshaller, Object parent) {
+      if (task.getType().equals(Task.Type.CONFIGURE) && StringUtils.isNotEmpty(service)) {
+        ((ConfigureTask) task).associatedService = service;
+      } else if (task.getType().equals(Task.Type.CREATE_AND_CONFIGURE) && StringUtils.isNotEmpty(service)) {
+        ((CreateAndConfigureTask) task).associatedService = service;
+      }
+    }
+
+
   }
 
   public class ClusterBuilder extends StageWrapperBuilder {
@@ -176,6 +195,15 @@ public class ClusterGrouping extends Grouping {
             if (!upgradeContext.isServiceSupported(execution.service)) {
               continue;
             }
+          }
+
+          // tasks can have their own condition, so check that too
+          if (null != execution.task.condition
+              && !execution.task.condition.isSatisfied(upgradeContext)) {
+            LOG.info("Skipping {} while building upgrade orchestration due to {}", execution,
+                execution.task.condition);
+
+            continue;
           }
 
           Task task = execution.task;
@@ -240,7 +268,7 @@ public class ClusterGrouping extends Grouping {
       return new StageWrapper(
           StageWrapper.Type.SERVER_SIDE_ACTION,
           execution.title,
-          new TaskWrapper(null, null, Collections.<String>emptySet(), task));
+          new TaskWrapper(null, null, Collections.emptySet(), task));
     }
   }
 

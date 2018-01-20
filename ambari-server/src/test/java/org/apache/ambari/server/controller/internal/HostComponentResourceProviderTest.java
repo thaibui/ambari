@@ -50,7 +50,6 @@ import org.apache.ambari.server.controller.spi.Predicate;
 import org.apache.ambari.server.controller.spi.Request;
 import org.apache.ambari.server.controller.spi.RequestStatus;
 import org.apache.ambari.server.controller.spi.Resource;
-import org.apache.ambari.server.controller.spi.Resource.Type;
 import org.apache.ambari.server.controller.spi.ResourceProvider;
 import org.apache.ambari.server.controller.utilities.PredicateBuilder;
 import org.apache.ambari.server.controller.utilities.PropertyHelper;
@@ -106,9 +105,7 @@ public class HostComponentResourceProviderTest {
     ResourceProviderFactory resourceProviderFactory = createNiceMock(ResourceProviderFactory.class);
     Injector injector = createNiceMock(Injector.class);
     HostComponentResourceProvider hostComponentResourceProvider =
-        new HostComponentResourceProvider(PropertyHelper.getPropertyIds(type),
-        PropertyHelper.getKeyPropertyIds(type),
-        managementController, injector);
+        new HostComponentResourceProvider(managementController, injector);
 
     AbstractControllerResourceProvider.init(resourceProviderFactory);
 
@@ -116,8 +113,7 @@ public class HostComponentResourceProviderTest {
         AbstractResourceProviderTest.Matcher.getHostComponentRequestSet(
             "Cluster100", "Service100", "Component100", "Host100", null, null));
 
-    expect(resourceProviderFactory.getHostComponentResourceProvider(EasyMock.<Set<String>>anyObject(),
-        EasyMock.<Map<Type,String>>anyObject(),
+    expect(resourceProviderFactory.getHostComponentResourceProvider(
         eq(managementController))).
         andReturn(hostComponentResourceProvider).anyTimes();
 
@@ -129,8 +125,6 @@ public class HostComponentResourceProviderTest {
 
     ResourceProvider provider = AbstractControllerResourceProvider.getResourceProvider(
         type,
-        PropertyHelper.getPropertyIds(type),
-        PropertyHelper.getKeyPropertyIds(type),
         managementController);
 
     // add the property map to a set for the request.  add more maps for multiple creates
@@ -219,8 +213,7 @@ public class HostComponentResourceProviderTest {
 
 
     // set expectations
-    expect(resourceProviderFactory.getHostComponentResourceProvider(EasyMock.<Set<String>>anyObject(),
-        EasyMock.<Map<Type,String>>anyObject(),
+    expect(resourceProviderFactory.getHostComponentResourceProvider(
         eq(managementController))).
         andReturn(hostComponentResourceProvider).anyTimes();
 
@@ -292,8 +285,6 @@ public class HostComponentResourceProviderTest {
 
     ResourceProvider provider = AbstractControllerResourceProvider.getResourceProvider(
         type,
-        PropertyHelper.getPropertyIds(type),
-        PropertyHelper.getKeyPropertyIds(type),
         managementController);
 
 
@@ -374,7 +365,7 @@ public class HostComponentResourceProviderTest {
     expect(maintenanceStateHelper.isOperationAllowed(Resource.Type.Cluster, componentHost)).andReturn(true).anyTimes();
 
     expect(managementController.getHostComponents(
-        EasyMock.<Set<ServiceComponentHostRequest>>anyObject())).andReturn(nameResponse).once();
+        EasyMock.anyObject())).andReturn(nameResponse).once();
 
     Map<String, Map<State, List<ServiceComponentHost>>> changedHosts = new HashMap<>();
     List<ServiceComponentHost> changedComponentHosts = new ArrayList<>();
@@ -382,7 +373,7 @@ public class HostComponentResourceProviderTest {
     changedHosts.put("Component100", Collections.singletonMap(State.STARTED, changedComponentHosts));
 
     expect(managementController.addStages(null, cluster, mapRequestProps, null, null, null, changedHosts,
-        Collections.<ServiceComponentHost>emptyList(), false, false)).andReturn(stageContainer).once();
+        Collections.emptyList(), false, false)).andReturn(stageContainer).once();
 
     stageContainer.persist();
     expect(stageContainer.getRequestStatusResponse()).andReturn(response).once();
@@ -394,8 +385,7 @@ public class HostComponentResourceProviderTest {
     provider.setFieldValue("maintenanceStateHelper", maintenanceStateHelper);
     provider.setFieldValue("hostVersionDAO", hostVersionDAO);
 
-    expect(resourceProviderFactory.getHostComponentResourceProvider(EasyMock.<Set<String>>anyObject(),
-        EasyMock.<Map<Type,String>>anyObject(),
+    expect(resourceProviderFactory.getHostComponentResourceProvider(
         eq(managementController))).
         andReturn(provider).anyTimes();
 
@@ -452,9 +442,7 @@ public class HostComponentResourceProviderTest {
     Injector injector = createNiceMock(Injector.class);
 
     HostComponentResourceProvider provider =
-        new HostComponentResourceProvider(PropertyHelper.getPropertyIds(type),
-            PropertyHelper.getKeyPropertyIds(type),
-            managementController, injector);
+        new HostComponentResourceProvider(managementController, injector);
 
     // set expectations
     expect(managementController.deleteHostComponents(
@@ -489,40 +477,27 @@ public class HostComponentResourceProviderTest {
 
   @Test
   public void testCheckPropertyIds() throws Exception {
-    Set<String> propertyIds = new HashSet<>();
-    propertyIds.add("foo");
-    propertyIds.add("cat1/foo");
-    propertyIds.add("cat2/bar");
-    propertyIds.add("cat2/baz");
-    propertyIds.add("cat3/sub1/bam");
-    propertyIds.add("cat4/sub2/sub3/bat");
-    propertyIds.add("cat5/subcat5/map");
-
-    Map<Resource.Type, String> keyPropertyIds = new HashMap<>();
-
     AmbariManagementController managementController = createMock(AmbariManagementController.class);
     Injector injector = createNiceMock(Injector.class);
 
     HostComponentResourceProvider provider =
-        new HostComponentResourceProvider(propertyIds,
-        keyPropertyIds,
-        managementController, injector);
+        new HostComponentResourceProvider(managementController, injector);
 
-    Set<String> unsupported = provider.checkPropertyIds(Collections.singleton("foo"));
+    Set<String> unsupported = provider.checkPropertyIds(Collections.singleton(PropertyHelper.getPropertyId("HostRoles", "cluster_name")));
     Assert.assertTrue(unsupported.isEmpty());
 
     // note that key is not in the set of known property ids.  We allow it if its parent is a known property.
     // this allows for Map type properties where we want to treat the entries as individual properties
-    Assert.assertTrue(provider.checkPropertyIds(Collections.singleton("cat5/subcat5/map/key")).isEmpty());
+    Assert.assertTrue(provider.checkPropertyIds(Collections.singleton(PropertyHelper.getPropertyId("HostRoles/service_name", "key"))).isEmpty());
 
     unsupported = provider.checkPropertyIds(Collections.singleton("bar"));
     Assert.assertEquals(1, unsupported.size());
     Assert.assertTrue(unsupported.contains("bar"));
 
-    unsupported = provider.checkPropertyIds(Collections.singleton("cat1/foo"));
+    unsupported = provider.checkPropertyIds(Collections.singleton(PropertyHelper.getPropertyId("HostRoles", "component_name")));
     Assert.assertTrue(unsupported.isEmpty());
 
-    unsupported = provider.checkPropertyIds(Collections.singleton("cat1"));
+    unsupported = provider.checkPropertyIds(Collections.singleton("HostRoles"));
     Assert.assertTrue(unsupported.isEmpty());
 
     unsupported = provider.checkPropertyIds(Collections.singleton("config"));
@@ -574,7 +549,7 @@ public class HostComponentResourceProviderTest {
     expect(maintenanceStateHelper.isOperationAllowed(Resource.Type.Cluster, componentHost)).andReturn(true).anyTimes();
 
     expect(managementController.getHostComponents(
-        EasyMock.<Set<ServiceComponentHostRequest>>anyObject())).andReturn(Collections.<ServiceComponentHostResponse>emptySet()).once();
+        EasyMock.anyObject())).andReturn(Collections.emptySet()).once();
 
     Map<String, Map<State, List<ServiceComponentHost>>> changedHosts = new HashMap<>();
     List<ServiceComponentHost> changedComponentHosts = new ArrayList<>();
@@ -588,8 +563,7 @@ public class HostComponentResourceProviderTest {
     provider.setFieldValue("maintenanceStateHelper", maintenanceStateHelper);
     provider.setFieldValue("hostVersionDAO", hostVersionDAO);
 
-    expect(resourceProviderFactory.getHostComponentResourceProvider(EasyMock.<Set<String>>anyObject(),
-        EasyMock.<Map<Type,String>>anyObject(),
+    expect(resourceProviderFactory.getHostComponentResourceProvider(
         eq(managementController))).
         andReturn(provider).anyTimes();
 
@@ -658,7 +632,7 @@ public class HostComponentResourceProviderTest {
      */
     public TestHostComponentResourceProvider(Set<String> propertyIds, Map<Resource.Type, String> keyPropertyIds,
                                              AmbariManagementController managementController, Injector injector) throws Exception {
-      super(propertyIds, keyPropertyIds, managementController, injector);
+      super(managementController, injector);
     }
 
     public void setFieldValue(String fieldName, Object fieldValue) throws Exception {

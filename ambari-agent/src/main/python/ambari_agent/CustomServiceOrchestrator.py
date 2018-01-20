@@ -112,7 +112,7 @@ class CustomServiceOrchestrator():
 
   def map_task_to_process(self, task_id, processId):
     with self.commands_in_progress_lock:
-      logger.debug('Maps taskId=%s to pid=%s' % (task_id, processId))
+      logger.debug('Maps taskId=%s to pid=%s', task_id, processId)
       self.commands_in_progress[task_id] = processId
 
   def cancel_command(self, task_id, reason):
@@ -281,7 +281,11 @@ class CustomServiceOrchestrator():
 
     for config_type, credentials in configtype_credentials.items():
       config = commandJson['configurations'][config_type]
-      file_path = os.path.join(self.getProviderDirectory(serviceName), "{0}.jceks".format(config_type))
+      if 'role' in commandJson and commandJson['role']:
+        roleName = commandJson['role']
+        file_path = os.path.join(self.getProviderDirectory(roleName), "{0}.jceks".format(config_type))
+      else:
+        file_path = os.path.join(self.getProviderDirectory(serviceName), "{0}.jceks".format(config_type))
       if os.path.exists(file_path):
         os.remove(file_path)
       provider_path = 'jceks://file{file_path}'.format(file_path=file_path)
@@ -442,7 +446,7 @@ class CustomServiceOrchestrator():
   def command_canceled_reason(self, task_id):
     with self.commands_in_progress_lock:
       if self.commands_in_progress.has_key(task_id):#Background command do not push in this collection (TODO)
-        logger.debug('Pop with taskId %s' % task_id)
+        logger.debug('Pop with taskId %s', task_id)
         pid = self.commands_in_progress.pop(task_id)
         if not isinstance(pid, int):
           reason = pid

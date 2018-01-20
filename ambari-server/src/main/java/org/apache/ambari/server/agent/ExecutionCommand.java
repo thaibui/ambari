@@ -29,8 +29,7 @@ import org.apache.ambari.annotations.ExperimentalFeature;
 import org.apache.ambari.server.AmbariException;
 import org.apache.ambari.server.RoleCommand;
 import org.apache.ambari.server.state.Cluster;
-import org.apache.ambari.server.state.Service;
-import org.apache.ambari.server.state.ServiceComponent;
+import org.apache.ambari.server.state.UpgradeContext.UpgradeSummary;
 import org.apache.ambari.server.utils.StageUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -156,6 +155,12 @@ public class ExecutionCommand extends AgentCommand {
   @SerializedName("componentVersionMap")
   private Map<String, Map<String, String>> componentVersionMap = new HashMap<>();
 
+  @SerializedName("upgradeSummary")
+  private UpgradeSummary upgradeSummary;
+
+  @SerializedName("roleParameters")
+  private Map<String, Object> roleParameters;
+
   public void setConfigurationCredentials(Map<String, Map<String, String>> configurationCredentials) {
     this.configurationCredentials = configurationCredentials;
   }
@@ -231,6 +236,10 @@ public class ExecutionCommand extends AgentCommand {
     return roleParams;
   }
 
+  /**
+   * Sets the roleParams for the command.  Consider instead using {@link #setRoleParameters}
+   * @param roleParams
+   */
   public void setRoleParams(Map<String, String> roleParams) {
     this.roleParams = roleParams;
   }
@@ -328,11 +337,11 @@ public class ExecutionCommand extends AgentCommand {
   }
 
   public String getServiceType() {
-	return serviceType;
+    return serviceType;
   }
 
   public void setServiceType(String serviceType) {
-	this.serviceType = serviceType;
+    this.serviceType = serviceType;
   }
 
   /**
@@ -409,6 +418,23 @@ public class ExecutionCommand extends AgentCommand {
   }
 
   /**
+   * Gets the object-based role parameters for the command.
+   */
+  public Map<String, Object> getRoleParameters() {
+    return roleParameters;
+  }
+
+  /**
+   * Sets the role parameters for the command.  This is preferred over {@link #setRoleParams(Map)},
+   * as this form will pass values as structured data, as opposed to unstructured, escaped json.
+   *
+   * @param params
+   */
+  public void setRoleParameters(Map<String, Object> params) {
+    roleParameters = params;
+  }
+
+  /**
    * Contains key name strings. These strings are used inside maps
    * incapsulated inside command.
    */
@@ -428,6 +454,7 @@ public class ExecutionCommand extends AgentCommand {
     String PACKAGE_LIST = "package_list";
     String JDK_LOCATION = "jdk_location";
     String JAVA_HOME = "java_home";
+    String GPL_LICENSE_ACCEPTED = "gpl_license_accepted";
     String AMBARI_JAVA_HOME = "ambari_java_home";
     String AMBARI_JDK_NAME = "ambari_jdk_name";
     String AMBARI_JCE_NAME = "ambari_jce_name";
@@ -446,6 +473,7 @@ public class ExecutionCommand extends AgentCommand {
     @Deprecated
     @Experimental(feature=ExperimentalFeature.PATCH_UPGRADES)
     String REPO_INFO = "repo_info";
+
     String DB_NAME = "db_name";
     String GLOBAL = "global";
     String AMBARI_DB_RCA_URL = "ambari_db_rca_url";
@@ -500,7 +528,7 @@ public class ExecutionCommand extends AgentCommand {
     /**
      * The version of the component to send down with the command. Normally,
      * this is simply the repository version of the component. However, during
-     * ugprades, this value may change depending on the progress of the upgrade
+     * upgrades, this value may change depending on the progress of the upgrade
      * and the type/direction.
      */
     @Experimental(
@@ -508,15 +536,11 @@ public class ExecutionCommand extends AgentCommand {
         comment = "Change this to reflect the component version")
     String VERSION = "version";
 
+
     /**
-     * Put on hostLevelParams to indicate the version that the component should
-     * be.
+     * When installing packages, includes what services will be included in the upgrade
      */
-    @Deprecated
-    @Experimental(
-        feature = ExperimentalFeature.PATCH_UPGRADES,
-        comment = "This should be replaced by a map of all service component versions")
-    String CURRENT_VERSION = "current_version";
+    String CLUSTER_VERSION_SUMMARY = "cluster_version_summary";
   }
 
   /**
@@ -527,29 +551,39 @@ public class ExecutionCommand extends AgentCommand {
   }
 
   /**
-   * Used to set a map of {service -> { component -> version}}.  This is necessary when performing
-   * an upgrade to correct build paths of required binaries.
-   * @param cluster the cluster from which to build the map
+   * Used to set a map of {service -> { component -> version}}. This is
+   * necessary when performing an upgrade to correct build paths of required
+   * binaries. This method will only set the version information for a component
+   * if:
+   * <ul>
+   * <li>The component advertises a version</li>
+   * <li>The repository for the component has been resolved and the version can
+   * be trusted</li>
+   * </ul>
+   *
+   * @param cluster
+   *          the cluster from which to build the map
    */
   public void setComponentVersions(Cluster cluster) throws AmbariException {
-    Map<String, Map<String, String>> componentVersionMap = new HashMap<>();
+    componentVersionMap = cluster.getComponentVersionMap();
+  }
 
-    for (Service service : cluster.getServices().values()) {
-      Map<String, String> componentMap = new HashMap<>();
+  /**
+   * Sets the upgrade summary if there is an active upgrade in the cluster.
+   *
+   * @param upgradeSummary
+   *          the upgrade or {@code null} for none.
+   */
+  public void setUpgradeSummary(UpgradeSummary upgradeSummary) {
+    this.upgradeSummary = upgradeSummary;
+  }
 
-      boolean shouldSet = false;
-      for (ServiceComponent component : service.getServiceComponents().values()) {
-        if (component.isVersionAdvertised()) {
-          shouldSet = true;
-          componentMap.put(component.getName(), component.getDesiredVersion());
-        }
-      }
-
-      if (shouldSet) {
-        componentVersionMap.put(service.getName(), componentMap);
-      }
-    }
-
-    this.componentVersionMap = componentVersionMap;
+  /**
+   * Gets the upgrade summary if there is an active upgrade in the cluster.
+   *
+   * @return the upgrade or {@code null} for none.
+   */
+  public UpgradeSummary getUpgradeSummary() {
+    return upgradeSummary;
   }
 }

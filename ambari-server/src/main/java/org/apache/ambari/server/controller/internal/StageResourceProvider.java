@@ -56,6 +56,8 @@ import org.apache.ambari.server.topology.TopologyManager;
 import org.apache.ambari.server.utils.SecretReference;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.math.NumberUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.Sets;
 
@@ -64,6 +66,8 @@ import com.google.common.collect.Sets;
  */
 @StaticallyInject
 public class StageResourceProvider extends AbstractControllerResourceProvider implements ExtendedResourceProvider {
+
+  private static final Logger LOG = LoggerFactory.getLogger(StageResourceProvider.class);
 
   /**
    * Used for querying stage resources.
@@ -146,7 +150,7 @@ public class StageResourceProvider extends AbstractControllerResourceProvider im
    * @param managementController  the Ambari management controller
    */
   StageResourceProvider(AmbariManagementController managementController) {
-    super(PROPERTY_IDS, KEY_PROPERTY_IDS, managementController);
+    super(Resource.Type.Stage, PROPERTY_IDS, KEY_PROPERTY_IDS, managementController);
   }
 
   // ----- AbstractResourceProvider ------------------------------------------

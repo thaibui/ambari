@@ -20,7 +20,6 @@ package org.apache.ambari.server.controller.internal;
 
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 
 import org.apache.ambari.server.controller.ResourceProviderFactory;
@@ -199,13 +198,6 @@ public class RequestImplTest {
     request = PropertyHelper.getReadRequest(PropertyHelper.getPropertyIds(Resource.Type.User));
     validPropertyIds = request.getPropertyIds();
 
-    //User resource properties
-    Assert.assertFalse(validPropertyIds.contains("Users/unsupported_property_id"));
-    Assert.assertTrue(validPropertyIds.contains("Users/user_name"));
-    Assert.assertTrue(validPropertyIds.contains("Users/password"));
-    Assert.assertTrue(validPropertyIds.contains("Users/old_password"));
-    Assert.assertTrue(validPropertyIds.contains("Users/ldap_user"));
-
     request = PropertyHelper.getReadRequest(PropertyHelper.getPropertyIds(Resource.Type.Stack));
     validPropertyIds = request.getPropertyIds();
 
@@ -284,9 +276,9 @@ public class RequestImplTest {
 
   @Test
   public void testDryRunRequest() {
-    Request dryRunRequest = PropertyHelper.getCreateRequest(Collections.<Map<String,Object>>emptySet(), Collections.singletonMap(Request.DIRECTIVE_DRY_RUN, "true"));
-    Request nonDryRunReqest1 = PropertyHelper.getCreateRequest(Collections.<Map<String,Object>>emptySet(), Collections.singletonMap(Request.DIRECTIVE_DRY_RUN, "false"));
-    Request nonDryRunReqest2 = PropertyHelper.getCreateRequest(Collections.<Map<String,Object>>emptySet(), Collections.<String, String>emptyMap());
+    Request dryRunRequest = PropertyHelper.getCreateRequest(Collections.emptySet(), Collections.singletonMap(Request.DIRECTIVE_DRY_RUN, "true"));
+    Request nonDryRunReqest1 = PropertyHelper.getCreateRequest(Collections.emptySet(), Collections.singletonMap(Request.DIRECTIVE_DRY_RUN, "false"));
+    Request nonDryRunReqest2 = PropertyHelper.getCreateRequest(Collections.emptySet(), Collections.emptyMap());
 
     Assert.assertTrue(dryRunRequest.isDryRunRequest());
     Assert.assertFalse(nonDryRunReqest1.isDryRunRequest());

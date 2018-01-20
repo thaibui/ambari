@@ -133,13 +133,13 @@ public class StackManagerTest {
   @Test
   public void testGetsStacks() throws Exception {
     Collection<StackInfo> stacks = stackManager.getStacks();
-    assertEquals(20, stacks.size());
+    assertEquals(21, stacks.size());
   }
 
   @Test
   public void testGetStacksByName() {
     Collection<StackInfo> stacks = stackManager.getStacks("HDP");
-    assertEquals(16, stacks.size());
+    assertEquals(17, stacks.size());
 
     stacks = stackManager.getStacks("OTHER");
     assertEquals(2, stacks.size());
@@ -289,6 +289,7 @@ public class StackManagerTest {
 
     //should include all stacks in hierarchy
     assertEquals(18, services.size());
+
     HashSet<String> expectedServices = new HashSet<>();
     expectedServices.add("GANGLIA");
     expectedServices.add("HBASE");
@@ -720,14 +721,6 @@ public class StackManagerTest {
     assertTrue(customMasterStartValues.contains("ZOOKEEPER_SERVER-START"));
     assertTrue(customMasterStartValues.contains("NAMENODE-START"));
 
-  }
-
-  @Test
-  public void testInheritKerberosDescriptor() throws Exception {
-    StackInfo stack = stackManager.getStack("HDP", "2.1.1");
-    String stacksFolder = ClassLoader.getSystemClassLoader().getResource("stacks").getPath();
-    assertEquals(new File(stacksFolder, "HDP/2.0.8/kerberos.json").getAbsolutePath(),
-        stack.getKerberosDescriptorFileLocation());
   }
 
   /**

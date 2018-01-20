@@ -31,7 +31,6 @@ import javax.persistence.ManyToOne;
 import javax.persistence.OneToOne;
 
 import org.apache.ambari.server.state.MaintenanceState;
-import org.apache.ambari.server.state.SecurityState;
 import org.apache.ambari.server.state.State;
 import org.apache.commons.lang.builder.EqualsBuilder;
 
@@ -40,29 +39,25 @@ import org.apache.commons.lang.builder.EqualsBuilder;
 @Entity
 public class ServiceDesiredStateEntity {
 
-  @Column(name = "cluster_id", nullable = false, insertable = false, updatable = false, length = 10)
   @Id
+  @Column(name = "cluster_id", nullable = false, insertable = false, updatable = false, length = 10)  
   private Long clusterId;
 
-  @Column(name = "service_name", nullable = false, insertable = false, updatable = false)
   @Id
+  @Column(name = "service_name", nullable = false, insertable = false, updatable = false)
   private String serviceName;
 
   @Column(name = "desired_state", nullable = false, insertable = true, updatable = true)
   @Enumerated(value = EnumType.STRING)
   private State desiredState = State.INIT;
 
-  @Column(name = "desired_host_role_mapping", nullable = false, insertable = true, updatable = true, length = 10)
   @Basic
+  @Column(name = "desired_host_role_mapping", nullable = false, insertable = true, updatable = true, length = 10)  
   private int desiredHostRoleMapping = 0;
 
   @Column(name = "maintenance_state", nullable = false, insertable = true, updatable = true)
   @Enumerated(value = EnumType.STRING)
   private MaintenanceState maintenanceState = MaintenanceState.OFF;
-
-  @Column(name = "security_state", nullable = false, insertable = true, updatable = true)
-  @Enumerated(value = EnumType.STRING)
-  private SecurityState securityState = SecurityState.UNSECURED;
 
   @Column(name = "credential_store_enabled", nullable = false, insertable = true, updatable = true)
   private short credentialStoreEnabled = 0;
@@ -124,14 +119,6 @@ public class ServiceDesiredStateEntity {
 
   public void setMaintenanceState(MaintenanceState state) {
     maintenanceState = state;
-  }
-
-  public SecurityState getSecurityState() {
-    return securityState;
-  }
-
-  public void setSecurityState(SecurityState securityState) {
-    this.securityState = securityState;
   }
 
   /**

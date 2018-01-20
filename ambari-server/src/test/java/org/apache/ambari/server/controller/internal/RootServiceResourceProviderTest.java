@@ -27,7 +27,6 @@ import java.util.HashSet;
 import java.util.Set;
 
 import org.apache.ambari.server.controller.AmbariManagementController;
-import org.apache.ambari.server.controller.RootServiceRequest;
 import org.apache.ambari.server.controller.RootServiceResponse;
 import org.apache.ambari.server.controller.spi.Predicate;
 import org.apache.ambari.server.controller.spi.Request;
@@ -57,15 +56,13 @@ public class RootServiceResourceProviderTest {
 
 
     // set expectations
-    expect(managementController.getRootServices(EasyMock.<Set<RootServiceRequest>>anyObject())).andReturn(allResponse).once();
-    expect(managementController.getRootServices(EasyMock.<Set<RootServiceRequest>>anyObject())).andReturn(nameResponse).once();
+    expect(managementController.getRootServices(EasyMock.anyObject())).andReturn(allResponse).once();
+    expect(managementController.getRootServices(EasyMock.anyObject())).andReturn(nameResponse).once();
     // replay
     replay(managementController);
 
     ResourceProvider provider = AbstractControllerResourceProvider.getResourceProvider(
         type,
-        PropertyHelper.getPropertyIds(type),
-        PropertyHelper.getKeyPropertyIds(type),
         managementController);
 
     Set<String> propertyIds = new HashSet<>();

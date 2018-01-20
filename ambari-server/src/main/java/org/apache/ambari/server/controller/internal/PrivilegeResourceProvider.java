@@ -111,7 +111,7 @@ public abstract class PrivilegeResourceProvider<T> extends AbstractAuthorizedRes
   public PrivilegeResourceProvider(Set<String> propertyIds,
                                    Map<Resource.Type, String> keyPropertyIds,
                                    Resource.Type resourceType) {
-    super(propertyIds, keyPropertyIds);
+    super(resourceType, propertyIds, keyPropertyIds);
     this.resourceType = resourceType;
   }
 
@@ -182,7 +182,7 @@ public abstract class PrivilegeResourceProvider<T> extends AbstractAuthorizedRes
     Set<Map<String, Object>> propertyMaps = getPropertyMaps(predicate);
 
     if (propertyMaps.isEmpty()) {
-      propertyMaps.add(Collections.<String, Object>emptyMap());
+      propertyMaps.add(Collections.emptyMap());
     }
 
     for (Map<String, Object> properties : propertyMaps) {

@@ -23,7 +23,6 @@ import static org.apache.ambari.server.controller.internal.HostComponentResource
 import static org.apache.ambari.server.controller.internal.HostComponentResourceProvider.HOST_COMPONENT_SERVICE_NAME_PROPERTY_ID;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -71,7 +70,10 @@ import org.apache.ambari.server.topology.LogicalRequest;
 import org.apache.ambari.server.topology.TopologyManager;
 import org.apache.ambari.server.utils.SecretReference;
 import org.apache.commons.lang.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
 import com.google.inject.Inject;
 
@@ -80,6 +82,8 @@ import com.google.inject.Inject;
  */
 @StaticallyInject
 public class RequestResourceProvider extends AbstractControllerResourceProvider {
+
+  private static final Logger LOG = LoggerFactory.getLogger(RequestResourceProvider.class);
 
   @Inject
   private static RequestDAO s_requestDAO = null;
@@ -129,14 +133,20 @@ public class RequestResourceProvider extends AbstractControllerResourceProvider 
   public static final String ACTION_ID = "action";
   public static final String INPUTS_ID = "parameters";
   public static final String EXLUSIVE_ID = "exclusive";
-
-  private static Set<String> pkPropertyIds =
-    new HashSet<>(Arrays.asList(new String[]{
-      REQUEST_ID_PROPERTY_ID}));
+  public static final String HAS_RESOURCE_FILTERS = "HAS_RESOURCE_FILTERS";
 
   private PredicateCompiler predicateCompiler = new PredicateCompiler();
 
+  /**
+   * The key property ids for a Request resource.
+   */
+  private static Map<Resource.Type, String> keyPropertyIds = ImmutableMap.<Resource.Type, String>builder()
+      .put(Resource.Type.Request, REQUEST_ID_PROPERTY_ID)
+      .put(Resource.Type.Cluster, REQUEST_CLUSTER_NAME_PROPERTY_ID)
+      .build();
+
   static Set<String> PROPERTY_IDS = Sets.newHashSet(
+    REQUEST_ID_PROPERTY_ID,
     REQUEST_CLUSTER_NAME_PROPERTY_ID,
     REQUEST_CLUSTER_ID_PROPERTY_ID,
     REQUEST_STATUS_PROPERTY_ID,
@@ -170,14 +180,10 @@ public class RequestResourceProvider extends AbstractControllerResourceProvider 
   /**
    * Create a  new resource provider for the given management controller.
    *
-   * @param propertyIds          the property ids
-   * @param keyPropertyIds       the key property ids
    * @param managementController the management controller
    */
-  RequestResourceProvider(Set<String> propertyIds,
-                          Map<Resource.Type, String> keyPropertyIds,
-                          AmbariManagementController managementController) {
-    super(propertyIds, keyPropertyIds, managementController);
+  RequestResourceProvider(AmbariManagementController managementController) {
+    super(Resource.Type.Request, PROPERTY_IDS, keyPropertyIds, managementController);
   }
 
   // ----- ResourceProvider ------------------------------------------------
@@ -250,7 +256,13 @@ public class RequestResourceProvider extends AbstractControllerResourceProvider 
                 ? null
                 : actionDefinition.getPermissions();
 
-            if (!AuthorizationHelper.isAuthorized(resourceType, resourceId, permissions)) {
+            // here goes ResourceType handling for some specific custom actions
+            ResourceType customActionResourceType = resourceType;
+            if (actionName.contains("check_host")) { // check_host custom action
+              customActionResourceType = ResourceType.CLUSTER;
+            }
+
+            if (!AuthorizationHelper.isAuthorized(customActionResourceType, resourceId, permissions)) {
               throw new AuthorizationException(String.format("The authenticated user is not authorized to execute the action %s.", actionName));
             }
           }
@@ -413,7 +425,7 @@ public class RequestResourceProvider extends AbstractControllerResourceProvider 
 
   @Override
   protected Set<String> getPKPropertyIds() {
-    return pkPropertyIds;
+    return new HashSet<>(Collections.singletonList(REQUEST_ID_PROPERTY_ID));
   }
 
 
@@ -444,12 +456,14 @@ public class RequestResourceProvider extends AbstractControllerResourceProvider 
     List<RequestResourceFilter> resourceFilterList = null;
     Set<Map<String, Object>> resourceFilters;
 
+    Map<String, String> params = new HashMap<>();
     Object resourceFilterObj = propertyMap.get(REQUEST_RESOURCE_FILTER_ID);
     if (resourceFilterObj != null && resourceFilterObj instanceof HashSet) {
       resourceFilters = (HashSet<Map<String, Object>>) resourceFilterObj;
       resourceFilterList = new ArrayList<>();
 
       for (Map<String, Object> resourceMap : resourceFilters) {
+        params.put(HAS_RESOURCE_FILTERS, "true");
         resourceFilterList.addAll(parseRequestResourceFilter(resourceMap,
           (String) propertyMap.get(REQUEST_CLUSTER_NAME_PROPERTY_ID)));
       }
@@ -461,7 +475,6 @@ public class RequestResourceProvider extends AbstractControllerResourceProvider 
       operationLevel = new RequestOperationLevel(requestInfoProperties);
     }
 
-    Map<String, String> params = new HashMap<>();
     String keyPrefix = INPUTS_ID + "/";
     for (String key : requestInfoProperties.keySet()) {
       if (key.startsWith(keyPrefix)) {

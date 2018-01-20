@@ -92,6 +92,7 @@
     <value-attributes>
       <overridable>false</overridable>
       <type>value-list</type>
+      <entries_editable>false</entries_editable>
       <entries>
         <entry>
           <value>New MySQL Database</value>
@@ -164,6 +165,12 @@
     <value-attributes>
       <type>user</type>
       <overridable>false</overridable>
+      <user-groups>
+        <property>
+          <type>cluster-env</type>
+          <name>user_group</name>
+        </property>
+      </user-groups>
     </value-attributes>
     <on-ambari-upgrade add="true"/>
   </property>
@@ -200,6 +207,12 @@
     <value-attributes>
       <type>user</type>
       <overridable>false</overridable>
+      <user-groups>
+        <property>
+          <type>cluster-env</type>
+          <name>user_group</name>
+        </property>
+      </user-groups>
     </value-attributes>
     <on-ambari-upgrade add="true"/>
   </property>

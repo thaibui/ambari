@@ -49,15 +49,6 @@ describe('App.MainAlertDefinitionsView', function () {
 
   App.TestAliases.testAsComputedAlias(getView(), 'totalCount', 'content.length', 'number');
 
-  describe('#serviceFilterView', function () {
-    it('Add Ambari service to filters', function () {
-      var serviceFilterClass = view.serviceFilterView;
-      var content = serviceFilterClass.create({}).get('content');
-      expect(content[0].label).to.be.equal(Em.I18n.t('common.all'));
-      expect(content[content.length - 1].label).to.be.equal(Em.I18n.t('app.name'));
-    });
-  });
-
   describe('#willInsertElement', function () {
 
     beforeEach(function(){
@@ -100,7 +91,7 @@ describe('App.MainAlertDefinitionsView', function () {
           },
           {
             name: "summary",
-            status: "sorting_asc"
+            status: "sorting_desc"
           }
         ])).to.be.true;
     });
@@ -177,149 +168,6 @@ describe('App.MainAlertDefinitionsView', function () {
       view.set('controller.name', 'ctrl1');
       view.clearStartIndex();
       expect(App.db.setStartIndex.calledWith('ctrl1', null)).to.be.true;
-    });
-  });
-
-  describe("#alertGroupFilterView", function () {
-    var alertGroupFilterView;
-
-    beforeEach(function() {
-      alertGroupFilterView = view.get('alertGroupFilterView').create({
-        parentView: Em.Object.create({
-          updateFilter: Em.K
-        })
-      });
-    });
-
-    describe("#didInsertElement()", function () {
-
-      beforeEach(function() {
-        sinon.stub(alertGroupFilterView, '$').returns({parent: function() {
-          return {
-            addClass: Em.K
-          }
-        }});
-        sinon.stub(alertGroupFilterView, 'showClearFilter');
-        sinon.stub(alertGroupFilterView, 'updateContent');
-        alertGroupFilterView.didInsertElement();
-      });
-
-      afterEach(function() {
-        alertGroupFilterView.$.restore();
-        alertGroupFilterView.updateContent.restore();
-        alertGroupFilterView.showClearFilter.restore();
-      });
-
-      it("updateContent should be called", function() {
-        expect(alertGroupFilterView.updateContent.calledOnce).to.be.true;
-      });
-
-      it("value should be empty", function() {
-        expect(alertGroupFilterView.get('value')).to.be.empty;
-      });
-    });
-
-    describe("#updateContent()", function () {
-
-      beforeEach(function() {
-        sinon.stub(App.AlertGroup, 'find').returns([
-          Em.Object.create({
-            id: 'g1',
-            displayNameDefinitions: 'def1',
-            default: true
-          }),
-          Em.Object.create({
-            id: 'g2',
-            displayNameDefinitions: 'def2',
-            default: false
-          })
-        ]);
-        sinon.stub(alertGroupFilterView, 'onValueChange');
-        alertGroupFilterView.set('parentView.controller', {content: [{}]});
-        alertGroupFilterView.updateContent();
-      });
-
-      afterEach(function() {
-        App.AlertGroup.find.restore();
-        alertGroupFilterView.onValueChange.restore();
-      });
-
-      it("onValueChange should be called", function() {
-        expect(alertGroupFilterView.onValueChange.calledOnce).to.be.true;
-      });
-
-      it("content should be set", function() {
-        expect(alertGroupFilterView.get('content')).to.be.eql([
-          Em.Object.create({
-            value: '',
-            label: Em.I18n.t('common.all') + ' (1)'
-          }),
-          Em.Object.create({
-            value: 'g1',
-            label: 'def1'
-          }),
-          Em.Object.create({
-            value: 'g2',
-            label: 'def2'
-          })
-        ]);
-      });
-    });
-
-    describe("#selectCategory()", function () {
-
-      beforeEach(function() {
-        sinon.stub(alertGroupFilterView.get('parentView'), 'updateFilter');
-        alertGroupFilterView.selectCategory({context: {value: 'val1'}});
-      });
-
-      afterEach(function() {
-        alertGroupFilterView.get('parentView').updateFilter.restore();
-      });
-
-      it("value should be set", function() {
-        expect(alertGroupFilterView.get('value')).to.be.equal('val1');
-      });
-
-      it("updateFilter should be called", function() {
-        expect(alertGroupFilterView.get('parentView').updateFilter.calledWith(
-          7, 'val1', 'alert_group'
-        )).to.be.true;
-      });
-    });
-
-    describe("#onValueChange()", function () {
-
-      beforeEach(function() {
-        sinon.stub(alertGroupFilterView.get('parentView'), 'updateFilter');
-      });
-
-      afterEach(function() {
-        alertGroupFilterView.get('parentView').updateFilter.restore();
-      });
-
-      it("value is undefined", function() {
-        alertGroupFilterView.set('value', undefined);
-        alertGroupFilterView.onValueChange();
-        expect(alertGroupFilterView.get('value')).to.be.empty;
-        expect(alertGroupFilterView.get('parentView').updateFilter.calledWith(
-          7, '', 'alert_group'
-        )).to.be.true;
-      });
-
-      it("value is not undefined", function() {
-        var option = Em.Object.create({
-          selected: true,
-          value: 'val1'
-        });
-        alertGroupFilterView.set('content', [ option ]);
-        alertGroupFilterView.set('value', 'val1');
-        alertGroupFilterView.onValueChange();
-        expect(option.get('selected')).to.be.true;
-        expect(alertGroupFilterView.get('parentView').updateFilter.calledWith(
-          7, 'val1', 'alert_group'
-        )).to.be.true;
-      });
     });
   });
 
@@ -436,4 +284,73 @@ describe('App.MainAlertDefinitionsView', function () {
       expect(view.tooltipsUpdater.calledOnce).to.be.true;
     });
   });
+
+  describe('#contentObsOnce', function () {
+    var toArray = function () {
+        return [{}];
+      },
+      cases = [
+        {
+          controllerContent: null,
+          isAlertsLoaded: false,
+          content: [],
+          title: 'no content in controller, alerts data not loaded'
+        },
+        {
+          controllerContent: null,
+          isAlertsLoaded: true,
+          content: [],
+          title: 'no content in controller, alerts data loaded'
+        },
+        {
+          controllerContent: {
+            toArray: toArray
+          },
+          isAlertsLoaded: false,
+          content: [],
+          title: 'content set in controller, alerts data not loaded'
+        },
+        {
+          controllerContent: {
+            toArray: toArray
+          },
+          isAlertsLoaded: true,
+          content: [{}],
+          title: 'content set in controller, alerts data loaded'
+        }
+      ];
+
+    cases.forEach(function (item) {
+      describe(item.title, function () {
+        beforeEach(function () {
+          var controller = {
+            content: item.controllerContent
+          };
+          sinon.stub(App.AlertDefinition, 'getSortDefinitionsByStatus', function () {
+            return Em.K;
+          });
+          sinon.stub(view, 'contentObs', Em.K);
+          sinon.stub(App, 'get', function (key) {
+            if (key === 'router.clusterController.isAlertsLoaded') {
+              return item.isAlertsLoaded;
+            }
+            return Em.get(App, key);
+          });
+          view.set('controller', controller);
+          view.contentObsOnce();
+        });
+
+        afterEach(function () {
+          view.contentObs.restore();
+          App.get.restore();
+          App.AlertDefinition.getSortDefinitionsByStatus.restore();
+        });
+
+        it('view.content', function () {
+          expect(view.get('content')).to.eql(item.content);
+        });
+      });
+    });
+  });
+
 });

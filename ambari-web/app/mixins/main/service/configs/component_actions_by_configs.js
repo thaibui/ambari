@@ -86,7 +86,7 @@ App.ComponentActionsByConfigs = Em.Mixin.create({
                 }
                 App.showConfirmationPopup(function () {
                   self.popupPrimaryButtonCallback(config_action);
-                }, body, null, Em.I18n.t('popup.confirmation.commonHeader'), config_action.get('popupProperties').primaryButton.label, false, 'refresh_yarn_queues')
+                }, body, null, Em.I18n.t('popup.confirmation.commonHeader'), config_action.get('popupProperties').primaryButton.label, 'success', 'refresh_yarn_queues')
               }
             }
           }
@@ -99,7 +99,7 @@ App.ComponentActionsByConfigs = Em.Mixin.create({
     var self = this;
     App.showConfirmationPopup(function () {
       self.hsiRestartPopupPrimaryButtonCallback(components);
-    }, Em.I18n.t('popup.confirmation.hsiRestart.body'), null, Em.I18n.t('popup.confirmation.commonHeader'), Em.I18n.t('popup.confirmation.hsiRestart.buttonText'), false, 'restart_hsi')
+    }, Em.I18n.t('popup.confirmation.hsiRestart.body'), null, Em.I18n.t('popup.confirmation.commonHeader'), Em.I18n.t('popup.confirmation.hsiRestart.buttonText'), 'success', 'restart_hsi')
   },
 
   hsiRestartPopupPrimaryButtonCallback: function (components) {
@@ -319,7 +319,7 @@ App.ComponentActionsByConfigs = Em.Mixin.create({
 
     return {
       "type": 'POST',
-      "uri": App.get('apiPrefix') + "/clusters/" + App.get('clusterName') + "/hosts",
+      "uri": "/clusters/" + App.get('clusterName') + "/hosts",
       "RequestBodyInfo": {
         "RequestInfo": {
           "query": query
@@ -372,7 +372,7 @@ App.ComponentActionsByConfigs = Em.Mixin.create({
 
     return {
       "type": 'PUT',
-      "uri": App.get('apiPrefix') + "/clusters/" + App.get('clusterName') + "/hosts/" + hostName + "/host_components",
+      "uri": "/clusters/" + App.get('clusterName') + "/hosts/" + hostName + "/host_components",
       "RequestBodyInfo": {
         "RequestInfo": {
           "context": context,
@@ -403,7 +403,7 @@ App.ComponentActionsByConfigs = Em.Mixin.create({
   getDeleteHostComponentRequest: function (hostName, component) {
     return {
       "type": 'DELETE',
-      "uri": App.get('apiPrefix') + "/clusters/" + App.get('clusterName') + "/hosts/" + hostName + "/host_components/" + component
+      "uri": "/clusters/" + App.get('clusterName') + "/hosts/" + hostName + "/host_components/" + component
     }
   },
 
@@ -424,7 +424,7 @@ App.ComponentActionsByConfigs = Em.Mixin.create({
       if (!serviceComponents.contains(_componentName)) {
         batches.push({
           "type": 'POST',
-          "uri": App.get('apiPrefix') + "/clusters/" + App.get('clusterName') + "/services/" + serviceName + "/components/" + _componentName
+          "uri": "/clusters/" + App.get('clusterName') + "/services/" + serviceName + "/components/" + _componentName
         });
       }
     });
@@ -453,7 +453,7 @@ App.ComponentActionsByConfigs = Em.Mixin.create({
       this.isYarnQueueRefreshed = true;
       batches.push({
         "type": 'POST',
-        "uri": App.get('apiPrefix') + "/clusters/" + App.get('clusterName') + "/requests",
+        "uri": "/clusters/" + App.get('clusterName') + "/requests",
         "RequestBodyInfo": {
           "RequestInfo": {
             "context": Em.I18n.t('services.service.actions.run.yarnRefreshQueues.context'),

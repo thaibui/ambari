@@ -87,10 +87,25 @@ angular.module('ambariAdminConsole')
       return deferred.promise;
     },
 
+    getGPLLicenseAccepted: function() {
+      var deferred = $q.defer();
+
+      $http.get(Settings.baseUrl + '/services/AMBARI/components/AMBARI_SERVER?fields=RootServiceComponents/properties/gpl.license.accepted&minimal_response=true', {mock: 'true'})
+        .then(function(data) {
+          deferred.resolve(data.data.RootServiceComponents.properties && data.data.RootServiceComponents.properties['gpl.license.accepted']);
+        })
+        .catch(function(data) {
+          deferred.reject(data);
+        });
+
+      return deferred.promise;
+    },
+    
     allPublicStackVersions: function() {
       var self = this;
-      var url = '/version_definitions?fields=VersionDefinition/stack_default,VersionDefinition/stack_repo_update_link_exists,operating_systems/repositories/Repositories/*,VersionDefinition/stack_services,VersionDefinition/repository_version' +
-        '&VersionDefinition/show_available=true';
+      var url = '/version_definitions?fields=VersionDefinition/stack_default,VersionDefinition/type,' +
+        'VersionDefinition/stack_repo_update_link_exists,operating_systems/repositories/Repositories/*,' +
+        'VersionDefinition/stack_services,VersionDefinition/repository_version&VersionDefinition/show_available=true';
       var deferred = $q.defer();
       $http.get(Settings.baseUrl + url, {mock: 'version/versions.json'})
         .success(function (data) {
@@ -174,24 +189,8 @@ angular.module('ambariAdminConsole')
       }
     },
 
-    allRepos: function (filter, pagination) {
-      var versionFilter = filter.version;
-      var nameFilter = filter.name;
-      var stackFilter = filter.stack && filter.stack.current && filter.stack.current.value;
+    allRepos: function () {
       var url = '/stacks?fields=versions/repository_versions/RepositoryVersions';
-      if (versionFilter) {
-        url += '&versions/repository_versions/RepositoryVersions/repository_version.matches(.*' + versionFilter + '.*)';
-      }
-      if (nameFilter) {
-        url += '&versions/repository_versions/RepositoryVersions/display_name.matches(.*' + nameFilter + '.*)';
-      }
-      if (stackFilter) {
-        var stack = filter.stack.current.value.split('-'),
-          stackNameFilter = stack[0],
-          stackVersionFilter = stack[1];
-        url += '&versions/repository_versions/RepositoryVersions/stack_name=' + stackNameFilter;
-        url += '&versions/repository_versions/RepositoryVersions/stack_version=' + stackVersionFilter;
-      }
       var deferred = $q.defer();
       $http.get(Settings.baseUrl + url, {mock: 'version/versions.json'})
       .success(function (data) {
@@ -205,20 +204,14 @@ angular.module('ambariAdminConsole')
           });
         });
         repos = repos.map(function (stack) {
+          stack.RepositoryVersions.isPatch = stack.RepositoryVersions.type === 'PATCH';
+          stack.RepositoryVersions.isMaint = stack.RepositoryVersions.type === 'MAINT';
           return stack.RepositoryVersions;
         });
         // prepare response data with client side pagination
         var response = {};
+        response.items = repos;
         response.itemTotal = repos.length;
-        if (pagination) {
-          var from = (pagination.currentPage - 1) * pagination.itemsPerPage;
-          var to = (repos.length - from > pagination.itemsPerPage)? from + pagination.itemsPerPage : repos.length;
-          response.items = repos.slice(from, to);
-          response.showed = to - from;
-        } else {
-          response.items = repos;
-          response.showed = repos.length;
-        }
         deferred.resolve(response);
       })
       .error(function (data) {
@@ -384,7 +377,8 @@ angular.module('ambariAdminConsole')
               $http.post(url + '/operating_systems/' + os.OperatingSystems.os_type + '/repositories/' + repo.Repositories.repo_id + '?validate_only=true',
                 {
                   "Repositories": {
-                    "base_url": repo.Repositories.base_url
+                    "base_url": repo.Repositories.base_url,
+                    "repo_name": repo.Repositories.repo_name
                   }
                 },
                 {
@@ -438,6 +432,18 @@ angular.module('ambariAdminConsole')
         return 0
       }
       return lId1 > lId2 ? 1 : -1;
+    },
+
+    filterAvailableServices: function (response) {
+      var stackVersion = response.updateObj.RepositoryVersions || response.updateObj.VersionDefinition;
+      var nonStandardVersion = stackVersion.type !== 'STANDARD';
+      var availableServices = (nonStandardVersion ? stackVersion.services : response.services).map(function (s) {
+        return s.name;
+      });
+      return response.services.filter(function (service) {
+        var skipServices = ['MAPREDUCE2', 'GANGLIA', 'KERBEROS'];
+        return skipServices.indexOf(service.name) === -1 && availableServices.indexOf(service.name) !== -1;
+      }) || [];
     }
 
   };

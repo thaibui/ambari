@@ -445,6 +445,29 @@ Em.Handlebars.registerHelper('isAuthorized', function (property, options) {
 });
 
 /**
+ * Usage:
+ *
+ * <pre>
+ *   {{#havePermissions "SERVICE.TOGGLE_ALERTS"}}
+ *     {{! some truly code }}
+ *   {{else}}
+ *     {{! some falsy code }}
+ *   {{/havePermissions}}
+ * </pre>
+ */
+Em.Handlebars.registerHelper('havePermissions', function (property, options) {
+  var permission = Ember.Object.create({
+    havePermissions: function() {
+      return App.havePermissions(property);
+    }.property()
+  });
+
+  // wipe out contexts so boundIf uses `this` (the permission) as the context
+  options.contexts = null;
+  return Ember.Handlebars.helpers.boundIf.call(permission, "havePermissions", options);
+});
+
+/**
  * @namespace App
  */
 App = require('app');
@@ -698,23 +721,28 @@ App.format = {
     var detailArr = command_detail.split(' ');
     var self = this;
     var result = '';
+    var isIncludeExcludeFiles = false;
     //if an optional operation display name has been specified in the service metainfo.xml
     if (ops_display_name != null && ops_display_name.length > 0) {
       result = result + ' ' + ops_display_name;
     } else {
     detailArr.forEach( function(item) {
       // if the item has the pattern SERVICE/COMPONENT, drop the SERVICE part
-      if (item.contains('/')) {
+      if (item.contains('/') && !isIncludeExcludeFiles) {
         item = item.split('/')[1];
       }
-      if (item == 'DECOMMISSION,') {
+      if (item === 'DECOMMISSION,') {
         // ignore text 'DECOMMISSION,'( command came from 'excluded/included'), here get the component name from request_inputs
-        item = (jQuery.parseJSON(request_inputs)) ? jQuery.parseJSON(request_inputs).slave_type : '';
+        var parsedInputs = jQuery.parseJSON(request_inputs);
+        item = (parsedInputs) ? (parsedInputs.slave_type || '') : '';
+        isIncludeExcludeFiles = (parsedInputs) ? parsedInputs.is_add_or_delete_slave_request === 'true' : false;
       }
       if (self.components[item]) {
         result = result + ' ' + self.components[item];
       } else if (self.command[item]) {
         result = result + ' ' + self.command[item];
+      } else if (isIncludeExcludeFiles) {
+        result = result + ' ' + item;
       } else {
         result = result + ' ' + self.role(item, false);
       }

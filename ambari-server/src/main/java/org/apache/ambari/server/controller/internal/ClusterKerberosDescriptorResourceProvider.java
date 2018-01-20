@@ -111,7 +111,7 @@ public class ClusterKerberosDescriptorResourceProvider extends ReadOnlyResourceP
    * Create a new resource provider.
    */
   public ClusterKerberosDescriptorResourceProvider(AmbariManagementController managementController) {
-    super(PROPERTY_IDS, KEY_PROPERTY_IDS, managementController);
+    super(Type.ClusterKerberosDescriptor, PROPERTY_IDS, KEY_PROPERTY_IDS, managementController);
   }
 
   @Override
@@ -158,7 +158,8 @@ public class ClusterKerberosDescriptorResourceProvider extends ReadOnlyResourceP
           kerberosDescriptor = kerberosHelper.getKerberosDescriptor(kerberosDescriptorType,
               cluster,
               getEvaluateWhen(requestInfoProperties),
-              getAdditionalServices(requestInfoProperties));
+              getAdditionalServices(requestInfoProperties),
+              false);
         } catch (AmbariException e) {
           throw new SystemException("An unexpected error occurred building the cluster's composite Kerberos Descriptor", e);
         }

@@ -42,7 +42,7 @@ App.WidgetMixin = Ember.Mixin.create({
    * @type {RegExp}
    * @const
    */
-  VALUE_NAME_REGEX: /(\w+\s+\w+)?[\w\.\,\:\=\[\]]+/g,
+  VALUE_NAME_REGEX: /(\w+\s+\w+)?[\w\.\,\-\:\=\[\]]+/g,
 
   /**
    * @type {string}
@@ -695,6 +695,7 @@ App.WidgetMixin = Ember.Mixin.create({
 App.WidgetPreviewMixin = Ember.Mixin.create({
   beforeRender: Em.K,
   isLoaded: true,
+  isPreview: true,
   metrics: [],
   content: Em.Object.create({
     id: 1,

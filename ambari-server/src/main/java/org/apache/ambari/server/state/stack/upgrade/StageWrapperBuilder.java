@@ -154,7 +154,7 @@ public abstract class StageWrapperBuilder {
       skippedFailedCheck.messages.add(AUTO_SKIPPED_MESSAGE);
 
       TaskWrapper skippedFailedTaskWrapper = new TaskWrapper(null, null,
-          Collections.<String> emptySet(), skippedFailedCheck);
+          Collections.emptySet(), skippedFailedCheck);
 
       StageWrapper skippedFailedStageWrapper = new StageWrapper(
           StageWrapper.Type.SERVER_SIDE_ACTION, "Verifying Skipped Failures",
@@ -229,7 +229,15 @@ public abstract class StageWrapperBuilder {
 
     List<Task> tasks = new ArrayList<>();
     for (Task t : interim) {
-      if (context.isScoped(t.scope)) {
+      boolean taskPassesScoping = context.isScoped(t.scope);
+      boolean taskPassesCondition = true;
+
+      // tasks can have conditions on them, so check to make sure the condition is satisfied
+      if (null != t.condition && !t.condition.isSatisfied(context)) {
+        taskPassesCondition = false;
+      }
+
+      if (taskPassesScoping && taskPassesCondition) {
         tasks.add(t);
       }
     }

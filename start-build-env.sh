@@ -46,6 +46,7 @@ FROM ambari-build:${BUILD_OS}
 RUN groupadd --non-unique -g ${GROUP_ID} ${USER_NAME}
 RUN useradd -g ${GROUP_ID} -u ${USER_ID} -k /root -m ${USER_NAME}
 ENV HOME /home/${USER_NAME}
+ENV JAVA_OPTS="-XX:PermSize=2048m -XX:MaxPermSize=1024m"
 UserSpecificDocker
 
 TTY_MODE="-t -i"

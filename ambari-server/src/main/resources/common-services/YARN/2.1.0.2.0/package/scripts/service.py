@@ -48,7 +48,7 @@ def service(componentName, action='start', serviceName='yarn'):
 
     delete_pid_file = True
     daemon = format("{mapred_bin}/mr-jobhistory-daemon.sh")
-    pid_file = format("{mapred_pid_dir}/mapred-{mapred_user}-{componentName}.pid")
+    pid_file = format("{mapred_pid_dir}/hadoop-{mapred_user}-{componentName}.pid")
     usr = params.mapred_user
     log_dir = params.mapred_log_dir
   else:

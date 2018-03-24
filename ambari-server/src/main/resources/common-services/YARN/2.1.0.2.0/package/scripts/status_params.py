@@ -37,7 +37,7 @@ resourcemanager_pid_file = format("{yarn_pid_dir}/hadoop-{yarn_user}-resourceman
 nodemanager_pid_file = format("{yarn_pid_dir}/hadoop-{yarn_user}-nodemanager.pid")
 yarn_historyserver_pid_file_old = format("{yarn_pid_dir}/hadoop-{yarn_user}-historyserver.pid")
 yarn_historyserver_pid_file = format("{yarn_pid_dir}/hadoop-{yarn_user}-timelineserver.pid")  # *-historyserver.pid is deprecated
-mapred_historyserver_pid_file = format("{mapred_pid_dir}/mapred-{mapred_user}-historyserver.pid")
+mapred_historyserver_pid_file = format("{mapred_pid_dir}/hadoop-{mapred_user}-historyserver.pid")
 
 hadoop_home = stack_select.get_hadoop_dir("home")
 hadoop_conf_dir = functions.conf_select.get_hadoop_conf_dir()

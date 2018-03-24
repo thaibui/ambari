@@ -56,7 +56,7 @@ def service(componentName, action='start', serviceName='yarn'):
     # may not work correctly when stopping the service
     delete_pid_file = False
     daemon = format("{yarn_bin}/yarn-daemon.sh")
-    pid_file = format("{yarn_pid_dir}/yarn-{yarn_user}-{componentName}.pid")
+    pid_file = format("{yarn_pid_dir}/hadoop-{yarn_user}-{componentName}.pid")
     usr = params.yarn_user
     log_dir = params.yarn_log_dir
 

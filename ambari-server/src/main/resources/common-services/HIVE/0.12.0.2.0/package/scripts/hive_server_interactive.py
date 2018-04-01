@@ -272,7 +272,7 @@ class HiveServerInteractiveDefault(HiveServerInteractive):
 
         # E.g., output:
         # Prepared llap-slider-05Apr2016/run.sh for running LLAP on Slider
-        exp = r"Prepared (.*?run.sh) for running LLAP"
+        exp = r".*Prepared (.*?run.sh) for running LLAP.*"
         run_file_path = None
         out_splits = output.split("\n")
         for line in out_splits:

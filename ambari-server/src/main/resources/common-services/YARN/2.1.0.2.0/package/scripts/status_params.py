@@ -20,6 +20,7 @@ limitations under the License.
 from resource_management.libraries.script.script import Script
 from resource_management.libraries import functions
 from resource_management.libraries.functions import stack_select
+from resource_management.libraries.functions import conf_select
 from resource_management.libraries.functions import format
 from resource_management.libraries.functions.default import default
 
@@ -40,7 +41,7 @@ yarn_historyserver_pid_file = format("{yarn_pid_dir}/hadoop-{yarn_user}-timeline
 mapred_historyserver_pid_file = format("{mapred_pid_dir}/hadoop-{mapred_user}-historyserver.pid")
 
 hadoop_home = stack_select.get_hadoop_dir("home")
-hadoop_conf_dir = functions.conf_select.get_hadoop_conf_dir()
+hadoop_conf_dir = conf_select.get_hadoop_conf_dir()
 
 hostname = config['hostname']
 kinit_path_local = functions.get_kinit_path(default('/configurations/kerberos-env/executable_search_paths', None))

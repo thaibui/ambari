@@ -319,6 +319,12 @@ def format_namenode(force=None):
   hdfs_user = params.hdfs_user
   hadoop_conf_dir = params.hadoop_conf_dir
 
+  Directory(params.hadoop_pid_dir_prefix,
+            mode=0755,
+            owner=params.hdfs_user,
+            group=params.user_group
+  )
+
   if not params.dfs_ha_enabled:
     if force:
       ExecuteHadoop('namenode -format',
